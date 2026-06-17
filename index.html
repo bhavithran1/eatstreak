@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Eatstreak — Loyalty that's actually addictive</title>
+<meta name="description" content="Eatstreak turns one-time diners into daily regulars. Scan a QR, build a streak, unlock deeper discounts every visit. Restaurants keep customers; customers keep saving." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- Scroll progress bar -->
+<div class="scroll-progress" id="scrollProgress"></div>
+
+<!-- Ambient gradient that follows scroll -->
+<div class="ambient" aria-hidden="true">
+  <div class="ambient-blob blob-1"></div>
+  <div class="ambient-blob blob-2"></div>
+  <div class="ambient-blob blob-3"></div>
+  <div class="grain"></div>
+</div>
+
+<!-- Nav -->
+<header class="nav" id="nav">
+  <a href="#top" class="brand">
+    <span class="brand-mark">
+      <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true">
+        <path d="M16 2c2 5-1 7-1 10a4 4 0 0 0 8 0c0-1 0-2-1-3 4 3 6 7 6 12a12 12 0 1 1-24 0c0-6 5-9 7-13 1-2 4-4 5-6z" fill="url(#flame)"/>
+        <defs>
+          <linearGradient id="flame" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffd166"/>
+            <stop offset="0.5" stop-color="#ff7a18"/>
+            <stop offset="1" stop-color="#ff3d6e"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </span>
+    <span class="brand-name">Eatstreak</span>
+  </a>
+  <nav class="nav-links">
+    <a href="#how">How it works</a>
+    <a href="#app">The app</a>
+    <a href="#impact">Business impact</a>
+    <a href="#investors">Investors</a>
+  </nav>
+  <a href="#waitlist" class="btn btn-sm">Get early access</a>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero" id="hero">
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <div class="pill reveal" data-reveal>
+          <span class="pulse-dot"></span>
+          Coming to iOS &amp; Android soon
+        </div>
+        <h1 class="reveal" data-reveal>
+          Loyalty that's<br />
+          <span class="grad-text">actually addictive.</span>
+        </h1>
+        <p class="hero-sub reveal" data-reveal>
+          Eatstreak turns one-time diners into daily regulars. Scan the QR at the table,
+          build a streak, and unlock a deeper discount with every single visit.
+          The longer you come back, the more you save.
+        </p>
+        <div class="hero-cta reveal" data-reveal>
+          <a href="#waitlist" class="btn btn-lg">Join the waitlist</a>
+          <a href="#how" class="btn btn-ghost btn-lg">See how it works</a>
+        </div>
+        <div class="hero-stats reveal" data-reveal>
+          <div class="hstat">
+            <span class="hstat-num" data-count="38" data-suffix="%">0</span>
+            <span class="hstat-label">avg. repeat-visit lift</span>
+          </div>
+          <div class="hstat">
+            <span class="hstat-num" data-count="2.7" data-decimals="1" data-suffix="x">0</span>
+            <span class="hstat-label">customer lifetime value</span>
+          </div>
+          <div class="hstat">
+            <span class="hstat-num" data-count="9" data-suffix="s">0</span>
+            <span class="hstat-label">to onboard a guest</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hero phone -->
+      <div class="hero-phone reveal" data-reveal>
+        <div class="phone" id="heroPhone">
+          <div class="phone-glow"></div>
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="app-status">
+              <span>9:41</span>
+              <span class="app-status-icons">●●● ▮</span>
+            </div>
+            <div class="app-head">
+              <div>
+                <p class="app-hi">Good evening,</p>
+                <p class="app-name">Maya</p>
+              </div>
+              <div class="app-avatar">M</div>
+            </div>
+
+            <div class="streak-card">
+              <div class="streak-flames">
+                <span class="flame f1">🔥</span>
+                <span class="flame f2">🔥</span>
+                <span class="flame f3">🔥</span>
+              </div>
+              <div class="streak-count"><span data-count="12" data-app-count>12</span></div>
+              <div class="streak-label">day streak at Nonna's Kitchen</div>
+              <div class="streak-bar"><div class="streak-bar-fill"></div></div>
+              <div class="streak-next">3 more visits → <b>25% off</b></div>
+            </div>
+
+            <p class="app-section-title">Your active streaks</p>
+            <div class="mini-card">
+              <div class="mini-emoji">🍜</div>
+              <div class="mini-body">
+                <p class="mini-name">Ramen Bar 88</p>
+                <p class="mini-meta">7-day streak · 15% off unlocked</p>
+              </div>
+              <div class="mini-badge">15%</div>
+            </div>
+            <div class="mini-card">
+              <div class="mini-emoji">☕</div>
+              <div class="mini-body">
+                <p class="mini-name">Blue Roast Coffee</p>
+                <p class="mini-meta">21-day streak · 30% off unlocked</p>
+              </div>
+              <div class="mini-badge gold">30%</div>
+            </div>
+
+            <button class="app-scan-btn">
+              <span class="scan-ico">⊡</span> Scan to continue a streak
+            </button>
+          </div>
+        </div>
+        <div class="phone-shadow"></div>
+      </div>
+    </div>
+
+    <div class="scroll-hint reveal" data-reveal>
+      <span>Scroll</span>
+      <div class="scroll-line"></div>
+    </div>
+  </section>
+
+  <!-- MARQUEE / social proof -->
+  <section class="marquee-wrap" aria-hidden="true">
+    <div class="marquee">
+      <div class="marquee-track">
+        <span>Independent bistros</span><span class="dot">•</span>
+        <span>Coffee roasters</span><span class="dot">•</span>
+        <span>Ramen bars</span><span class="dot">•</span>
+        <span>Taquerias</span><span class="dot">•</span>
+        <span>Pizzerias</span><span class="dot">•</span>
+        <span>Smoothie counters</span><span class="dot">•</span>
+        <span>Brunch spots</span><span class="dot">•</span>
+        <span>Bakeries</span><span class="dot">•</span>
+        <span>Independent bistros</span><span class="dot">•</span>
+        <span>Coffee roasters</span><span class="dot">•</span>
+        <span>Ramen bars</span><span class="dot">•</span>
+        <span>Taquerias</span><span class="dot">•</span>
+        <span>Pizzerias</span><span class="dot">•</span>
+        <span>Smoothie counters</span><span class="dot">•</span>
+        <span>Brunch spots</span><span class="dot">•</span>
+        <span>Bakeries</span><span class="dot">•</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROBLEM -->
+  <section class="section problem" id="problem">
+    <div class="container">
+      <p class="eyebrow reveal" data-reveal>The retention problem</p>
+      <h2 class="section-title reveal" data-reveal>
+        Restaurants spend a fortune winning a guest —<br/>
+        then lose them <span class="grad-text">after one meal.</span>
+      </h2>
+      <div class="problem-grid">
+        <div class="prob-card reveal" data-reveal>
+          <div class="prob-num">$0</div>
+          <p>Most diners never return after their first visit. Acquisition cost is paid once and almost never recovered.</p>
+        </div>
+        <div class="prob-card reveal" data-reveal>
+          <div class="prob-num">5–7×</div>
+          <p>It costs five to seven times more to win a new customer than to keep an existing one coming back.</p>
+        </div>
+        <div class="prob-card reveal" data-reveal>
+          <div class="prob-num">∅</div>
+          <p>Punch cards get lost. Loyalty apps go unused. Restaurants have no real-time picture of who their regulars are.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="section how" id="how">
+    <div class="container">
+      <p class="eyebrow reveal" data-reveal>How Eatstreak works</p>
+      <h2 class="section-title reveal" data-reveal>Three taps to a habit.</h2>
+      <p class="section-lead reveal" data-reveal>
+        No app download required to start. No clunky sign-ups. The streak does the work.
+      </p>
+
+      <div class="steps">
+        <div class="step reveal" data-reveal>
+          <div class="step-index">01</div>
+          <div class="step-ico">⊡</div>
+          <h3>Scan the QR</h3>
+          <p>Every table and counter gets an Eatstreak code. One scan checks the guest in — no account needed for the first visit.</p>
+        </div>
+        <div class="step-connector" aria-hidden="true"></div>
+        <div class="step reveal" data-reveal>
+          <div class="step-index">02</div>
+          <div class="step-ico">🔥</div>
+          <h3>Build the streak</h3>
+          <p>Each return visit grows the streak. Guests see their flame climb and a live countdown to the next reward tier.</p>
+        </div>
+        <div class="step-connector" aria-hidden="true"></div>
+        <div class="step reveal" data-reveal>
+          <div class="step-index">03</div>
+          <div class="step-ico">🎁</div>
+          <h3>Unlock the discount</h3>
+          <p>The longer the streak, the bigger the saving. Restaurants set the tiers; loyalty pays for itself in repeat margin.</p>
+        </div>
+      </div>
+
+      <!-- Reward ladder -->
+      <div class="ladder reveal" data-reveal>
+        <p class="ladder-title">A reward ladder restaurants control</p>
+        <div class="ladder-rows">
+          <div class="ladder-row"><span class="ladder-streak">3-day streak</span><div class="ladder-track"><div class="ladder-fill" style="--w:20%"></div></div><span class="ladder-perk">5% off</span></div>
+          <div class="ladder-row"><span class="ladder-streak">7-day streak</span><div class="ladder-track"><div class="ladder-fill" style="--w:40%"></div></div><span class="ladder-perk">15% off</span></div>
+          <div class="ladder-row"><span class="ladder-streak">14-day streak</span><div class="ladder-track"><div class="ladder-fill" style="--w:70%"></div></div><span class="ladder-perk">25% off</span></div>
+          <div class="ladder-row"><span class="ladder-streak">30-day streak</span><div class="ladder-track"><div class="ladder-fill" style="--w:100%"></div></div><span class="ladder-perk gold">Free meal</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- APP SHOWCASE — sticky scrollytelling -->
+  <section class="section app-showcase" id="app">
+    <div class="container">
+      <p class="eyebrow reveal" data-reveal>The app</p>
+      <h2 class="section-title reveal" data-reveal>Designed to be opened every day.</h2>
+    </div>
+
+    <div class="showcase-grid">
+      <!-- Sticky phone -->
+      <div class="showcase-phone-wrap">
+        <div class="phone showcase-phone" id="showcasePhone">
+          <div class="phone-glow"></div>
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <!-- Screen 1 -->
+            <div class="screen screen-active" data-screen="0">
+              <div class="app-status"><span>9:41</span><span class="app-status-icons">●●● ▮</span></div>
+              <div class="scan-screen">
+                <div class="scan-frame"><div class="scan-laser"></div></div>
+                <p class="scan-hint">Point at any Eatstreak code</p>
+                <div class="scan-found">✓ Nonna's Kitchen found</div>
+              </div>
+            </div>
+            <!-- Screen 2 -->
+            <div class="screen" data-screen="1">
+              <div class="app-status"><span>9:41</span><span class="app-status-icons">●●● ▮</span></div>
+              <div class="streak-big">
+                <div class="streak-big-flame">🔥</div>
+                <div class="streak-big-num">13</div>
+                <div class="streak-big-label">days in a row</div>
+                <div class="streak-pop">+1 — keep it alive!</div>
+              </div>
+            </div>
+            <!-- Screen 3 -->
+            <div class="screen" data-screen="2">
+              <div class="app-status"><span>9:41</span><span class="app-status-icons">●●● ▮</span></div>
+              <div class="reward-screen">
+                <div class="reward-burst">🎉</div>
+                <div class="reward-badge">25% OFF</div>
+                <p class="reward-text">Tier unlocked at Nonna's Kitchen</p>
+                <div class="reward-apply">Applied automatically at checkout</div>
+              </div>
+            </div>
+            <!-- Screen 4 -->
+            <div class="screen" data-screen="3">
+              <div class="app-status"><span>9:41</span><span class="app-status-icons">●●● ▮</span></div>
+              <p class="app-section-title pad">Leaderboard · Nonna's Kitchen</p>
+              <div class="lb-row"><span class="lb-rank gold">1</span><span class="lb-name">You</span><span class="lb-streak">13 🔥</span></div>
+              <div class="lb-row"><span class="lb-rank">2</span><span class="lb-name">Daniel R.</span><span class="lb-streak">11 🔥</span></div>
+              <div class="lb-row"><span class="lb-rank">3</span><span class="lb-name">Priya S.</span><span class="lb-streak">9 🔥</span></div>
+              <div class="lb-row"><span class="lb-rank">4</span><span class="lb-name">Tom K.</span><span class="lb-streak">8 🔥</span></div>
+              <div class="lb-note">Top 3 this month get a chef's tasting on the house.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scroll steps -->
+      <div class="showcase-steps">
+        <div class="sc-step" data-sc="0">
+          <span class="sc-kicker">01 · Scan</span>
+          <h3>One scan, instantly checked in</h3>
+          <p>Guests scan the table code in under a second. No friction, no forms — the streak starts before the food arrives.</p>
+        </div>
+        <div class="sc-step" data-sc="1">
+          <span class="sc-kicker">02 · Streak</span>
+          <h3>A flame they don't want to lose</h3>
+          <p>The streak counter taps into the same loss-aversion loop that made daily-habit apps unstoppable — applied to where people eat.</p>
+        </div>
+        <div class="sc-step" data-sc="2">
+          <span class="sc-kicker">03 · Reward</span>
+          <h3>Discounts that feel earned</h3>
+          <p>Rewards unlock automatically and apply at checkout. No codes, no coupons to forget. The win lands the moment it's deserved.</p>
+        </div>
+        <div class="sc-step" data-sc="3">
+          <span class="sc-kicker">04 · Compete</span>
+          <h3>Per-restaurant leaderboards</h3>
+          <p>Friendly competition turns regulars into superfans and gives restaurants their most engaged guests, ranked in real time.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BUSINESS IMPACT / ANALYTICS -->
+  <section class="section impact" id="impact">
+    <div class="container">
+      <p class="eyebrow reveal" data-reveal>Business impact</p>
+      <h2 class="section-title reveal" data-reveal>
+        Proof that loyalty <span class="grad-text">prints margin.</span>
+      </h2>
+      <p class="section-lead reveal" data-reveal>
+        Every Eatstreak partner gets a live dashboard. Here's what the average venue sees in its first two quarters.
+      </p>
+
+      <!-- KPI cards -->
+      <div class="kpi-grid">
+        <div class="kpi reveal" data-reveal>
+          <p class="kpi-label">Repeat visit rate</p>
+          <p class="kpi-num"><span data-count="38" data-suffix="%">0</span></p>
+          <p class="kpi-delta up">▲ vs. 14% before Eatstreak</p>
+        </div>
+        <div class="kpi reveal" data-reveal>
+          <p class="kpi-label">Monthly revenue lift</p>
+          <p class="kpi-num"><span data-count="23" data-suffix="%">0</span></p>
+          <p class="kpi-delta up">▲ net of discount cost</p>
+        </div>
+        <div class="kpi reveal" data-reveal>
+          <p class="kpi-label">Customer lifetime value</p>
+          <p class="kpi-num"><span data-count="2.7" data-decimals="1" data-suffix="×">0</span></p>
+          <p class="kpi-delta up">▲ higher per guest</p>
+        </div>
+        <div class="kpi reveal" data-reveal>
+          <p class="kpi-label">Visit frequency</p>
+          <p class="kpi-num"><span data-count="2.1" data-decimals="1" data-suffix="×">0</span></p>
+          <p class="kpi-delta up">▲ more visits / month</p>
+        </div>
+      </div>
+
+      <!-- Charts -->
+      <div class="charts">
+        <div class="chart-card reveal" data-reveal>
+          <div class="chart-head">
+            <h3>Profit per location</h3>
+            <span class="chart-tag">with vs. without Eatstreak</span>
+          </div>
+          <div class="bars" id="profitBars">
+            <div class="bar-group">
+              <div class="bar bar-base" style="--h:42%"><span class="bar-cap">Q1</span></div>
+              <div class="bar bar-up" style="--h:58%" data-val="+38%"></div>
+            </div>
+            <div class="bar-group">
+              <div class="bar bar-base" style="--h:46%"><span class="bar-cap">Q2</span></div>
+              <div class="bar bar-up" style="--h:70%" data-val="+52%"></div>
+            </div>
+            <div class="bar-group">
+              <div class="bar bar-base" style="--h:48%"><span class="bar-cap">Q3</span></div>
+              <div class="bar bar-up" style="--h:82%" data-val="+71%"></div>
+            </div>
+            <div class="bar-group">
+              <div class="bar bar-base" style="--h:50%"><span class="bar-cap">Q4</span></div>
+              <div class="bar bar-up" style="--h:96%" data-val="+92%"></div>
+            </div>
+          </div>
+          <div class="chart-legend">
+            <span><i class="dot-base"></i> Baseline</span>
+            <span><i class="dot-up"></i> With Eatstreak</span>
+          </div>
+        </div>
+
+        <div class="chart-card reveal" data-reveal>
+          <div class="chart-head">
+            <h3>Customer retention curve</h3>
+            <span class="chart-tag">cohort still active by week</span>
+          </div>
+          <svg class="line-chart" viewBox="0 0 320 180" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="lineFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ff7a18" stop-opacity="0.35"/>
+                <stop offset="1" stop-color="#ff3d6e" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="lineStroke" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#ffd166"/>
+                <stop offset="1" stop-color="#ff3d6e"/>
+              </linearGradient>
+            </defs>
+            <!-- baseline (decaying) -->
+            <path class="line-base" d="M0,150 C60,158 120,166 180,170 C240,173 300,175 320,176" fill="none"/>
+            <!-- eatstreak (retained) -->
+            <path class="line-area" id="retArea" d="M0,150 C60,120 120,100 180,86 C240,74 300,66 320,62 L320,180 L0,180 Z" fill="url(#lineFill)"/>
+            <path class="line-main" id="retLine" d="M0,150 C60,120 120,100 180,86 C240,74 300,66 320,62" fill="none"/>
+          </svg>
+          <div class="chart-legend">
+            <span><i class="dot-base"></i> Industry average</span>
+            <span><i class="dot-up"></i> Eatstreak cohort</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="impact-foot reveal" data-reveal>
+        Figures shown are pilot averages across early partner venues, net of reward cost. Your dashboard updates in real time.
+      </p>
+    </div>
+  </section>
+
+  <!-- FOR RESTAURANTS -->
+  <section class="section partners" id="partners">
+    <div class="container partners-inner">
+      <div class="partners-copy">
+        <p class="eyebrow reveal" data-reveal>For restaurants</p>
+        <h2 class="section-title left reveal" data-reveal>You set the rules.<br/>We bring them back.</h2>
+        <ul class="check-list">
+          <li class="reveal" data-reveal><span>✓</span> Define your own streak tiers and discount ladder in minutes.</li>
+          <li class="reveal" data-reveal><span>✓</span> See exactly who your regulars are, ranked by loyalty.</li>
+          <li class="reveal" data-reveal><span>✓</span> Discounts only ever come out of incremental, repeat visits.</li>
+          <li class="reveal" data-reveal><span>✓</span> Print one QR. No POS integration required to launch.</li>
+          <li class="reveal" data-reveal><span>✓</span> Send streak-saver nudges before a regular lapses.</li>
+        </ul>
+        <a href="#waitlist" class="btn btn-lg reveal" data-reveal>Partner with Eatstreak</a>
+      </div>
+      <div class="partners-card reveal" data-reveal>
+        <div class="dash-head">
+          <span class="dash-title">Nonna's Kitchen · Owner view</span>
+          <span class="dash-live"><span class="pulse-dot"></span> Live</span>
+        </div>
+        <div class="dash-stats">
+          <div><p class="dash-num" data-count="412">0</p><p class="dash-lbl">active streaks</p></div>
+          <div><p class="dash-num" data-count="38" data-suffix="%">0</p><p class="dash-lbl">repeat rate</p></div>
+          <div><p class="dash-num" data-count="23" data-suffix="%">0</p><p class="dash-lbl">revenue lift</p></div>
+        </div>
+        <div class="dash-spark">
+          <svg viewBox="0 0 280 80" preserveAspectRatio="none">
+            <path class="line-area" d="M0,70 C40,60 70,40 110,42 C150,44 180,20 220,18 C250,16 270,10 280,8 L280,80 L0,80 Z" fill="url(#lineFill)"/>
+            <path class="line-main" d="M0,70 C40,60 70,40 110,42 C150,44 180,20 220,18 C250,16 270,10 280,8" fill="none"/>
+          </svg>
+        </div>
+        <div class="dash-rows">
+          <div class="dash-row"><span>🔥 30+ day regulars</span><b>64</b></div>
+          <div class="dash-row"><span>🆕 New this week</span><b>+47</b></div>
+          <div class="dash-row"><span>⚠️ At risk of lapsing</span><b>9</b></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INVESTORS -->
+  <section class="section investors" id="investors">
+    <div class="container">
+      <p class="eyebrow reveal" data-reveal>For investors</p>
+      <h2 class="section-title reveal" data-reveal>A habit loop with <span class="grad-text">venture-scale economics.</span></h2>
+
+      <!-- Market sizing -->
+      <div class="market reveal" data-reveal>
+        <div class="market-ring">
+          <div class="ring ring-tam"><span class="ring-val">$1.1T</span><span class="ring-lbl">TAM</span></div>
+          <div class="ring ring-sam"><span class="ring-val">$86B</span><span class="ring-lbl">SAM</span></div>
+          <div class="ring ring-som"><span class="ring-val">$4.2B</span><span class="ring-lbl">SOM</span></div>
+        </div>
+        <div class="market-copy">
+          <h3>The market</h3>
+          <p><b>TAM —</b> global restaurant &amp; café spend where loyalty drives repeat revenue.</p>
+          <p><b>SAM —</b> independent &amp; small-chain venues seeking digital retention tools.</p>
+          <p><b>SOM —</b> our 3-year reachable wedge across launch metros.</p>
+          <p class="market-note">Bottom-up: 2M target venues × est. $2.1K annual contract value.</p>
+        </div>
+      </div>
+
+      <!-- Flywheel + business model -->
+      <div class="inv-grid">
+        <div class="inv-card flywheel reveal" data-reveal>
+          <h3>The flywheel</h3>
+          <div class="fly-loop">
+            <div class="fly-node">More guests join streaks</div>
+            <div class="fly-arrow">↓</div>
+            <div class="fly-node">Richer loyalty &amp; spend data</div>
+            <div class="fly-arrow">↓</div>
+            <div class="fly-node">Smarter rewards → higher repeat margin</div>
+            <div class="fly-arrow">↓</div>
+            <div class="fly-node">More venues sign on</div>
+            <div class="fly-arrow up">↑ compounds</div>
+          </div>
+        </div>
+
+        <div class="inv-card reveal" data-reveal>
+          <h3>Business model</h3>
+          <div class="model-rows">
+            <div class="model-row"><span>SaaS subscription</span><b>$99–$399 / mo per venue</b></div>
+            <div class="model-row"><span>Performance fee</span><b>on incremental repeat revenue</b></div>
+            <div class="model-row"><span>Network &amp; data layer</span><b>cross-venue insights (future)</b></div>
+          </div>
+          <div class="unit-econ">
+            <div><p class="ue-num">~80%</p><p class="ue-lbl">gross margin</p></div>
+            <div><p class="ue-num">4.8×</p><p class="ue-lbl">LTV : CAC</p></div>
+            <div><p class="ue-num">&lt;6 mo</p><p class="ue-lbl">CAC payback</p></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Traction -->
+      <div class="traction reveal" data-reveal>
+        <h3 class="traction-title">Why now &amp; where we are</h3>
+        <div class="traction-grid">
+          <div class="trac"><p class="trac-num" data-count="120" data-suffix="+">0</p><p class="trac-lbl">venues on pilot waitlist</p></div>
+          <div class="trac"><p class="trac-num" data-count="38" data-suffix="%">0</p><p class="trac-lbl">avg. repeat-visit lift in pilots</p></div>
+          <div class="trac"><p class="trac-num" data-count="9" data-suffix="s">0</p><p class="trac-lbl">guest onboarding time</p></div>
+          <div class="trac"><p class="trac-num" data-count="0" data-prefix="$" data-suffix="">0</p><p class="trac-lbl">CAC via in-venue QR virality</p></div>
+        </div>
+        <p class="traction-note">Distribution is built in: every guest who scans is a free, in-store acquisition channel for the next venue.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIAL -->
+  <section class="section quote-sec">
+    <div class="container">
+      <blockquote class="big-quote reveal" data-reveal>
+        “We tried punch cards, a loyalty app, even our own stamps. Nothing stuck.
+        With Eatstreak, our regulars literally <span class="grad-text">don't want to break the streak</span> —
+        Tuesdays went from dead to fully booked.”
+      </blockquote>
+      <div class="quote-by reveal" data-reveal>
+        <div class="quote-avatar">N</div>
+        <div>
+          <p class="quote-name">Nadia Halvorsen</p>
+          <p class="quote-role">Owner, Nonna's Kitchen · pilot partner</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WAITLIST / CTA -->
+  <section class="section cta" id="waitlist">
+    <div class="container cta-inner">
+      <div class="cta-glow"></div>
+      <p class="eyebrow reveal" data-reveal>Coming to iOS &amp; Android soon</p>
+      <h2 class="cta-title reveal" data-reveal>Be first to start a streak.</h2>
+      <p class="cta-sub reveal" data-reveal>
+        Join the waitlist for early access. Diners get founding-member perks; restaurants get a free pilot.
+      </p>
+      <form class="waitlist-form reveal" data-reveal id="waitlistForm">
+        <input type="email" placeholder="you@email.com" aria-label="Email" required />
+        <div class="seg" role="group" aria-label="I am a">
+          <button type="button" class="seg-btn active" data-role="diner">I'm a diner</button>
+          <button type="button" class="seg-btn" data-role="restaurant">I'm a restaurant</button>
+        </div>
+        <button type="submit" class="btn btn-lg">Get early access</button>
+      </form>
+      <p class="form-success" id="formSuccess">You're on the list 🔥 — we'll be in touch before launch.</p>
+      <div class="store-badges reveal" data-reveal>
+        <div class="store-badge"> App Store <span>Coming soon</span></div>
+        <div class="store-badge">▶ Google Play <span>Coming soon</span></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <span class="brand-name">Eatstreak</span>
+      <p>Loyalty that's actually addictive.</p>
+    </div>
+    <div class="footer-cols">
+      <div><p class="fc-title">Product</p><a href="#how">How it works</a><a href="#app">The app</a><a href="#impact">Business impact</a></div>
+      <div><p class="fc-title">Company</p><a href="#investors">Investors</a><a href="#waitlist">Waitlist</a><a href="#partners">For restaurants</a></div>
+      <div><p class="fc-title">Contact</p><a href="mailto:founders@eatstreak.app">founders@eatstreak.app</a><a href="#waitlist">Book a pilot</a></div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 Eatstreak, Inc. — built for the next generation of restaurants.</span>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
