@@ -6,6 +6,7 @@ import { randomBytes } from 'crypto';
 import { Shop, Streak, Visit, Voucher, VisitResult, CheckInTokenDoc } from './types';
 import { toDateStringInTZ, DEFAULT_TIME_ZONE, addDays } from './dates';
 import { computeCheckIn, qualifyingTiers, generateVoucherCode, StreakCore } from './streakLogic';
+import { CHECK_IN_TOKEN_TTL_SECONDS, newCheckInTokenDoc, isCheckInTokenValid } from './checkInToken';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -15,10 +16,6 @@ setGlobalOptions({ region: 'asia-southeast1', maxInstances: 10 });
 
 const streakId = (uid: string, shopId: string) => `${uid}_${shopId}`;
 const voucherId = (uid: string, tierId: string) => `${uid}_${tierId}`;
-
-// A check-in code is valid for this long, then the owner's screen rotates it.
-// Short enough that a screenshot is useless, long enough to show at a counter.
-const CHECK_IN_TOKEN_TTL_SECONDS = 90;
 
 /**
  * Mint a single-use check-in code for a shop the caller owns. The owner's
@@ -42,24 +39,13 @@ export const createCheckInToken = onCall(
     }
 
     const token = randomBytes(18).toString('base64url');
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + CHECK_IN_TOKEN_TTL_SECONDS * 1000);
-
-    const doc: CheckInTokenDoc = {
-      shopId,
-      ownerId: uid,
-      createdAt: now.toISOString(),
-      expiresAt: expiresAt.toISOString(),
-      used: false,
-      usedBy: null,
-      usedAt: null,
-    };
+    const doc = newCheckInTokenDoc(shopId, uid, new Date());
     await db.collection('checkInTokens').doc(token).set(doc);
 
     return {
       token,
       shopId,
-      expiresAt: expiresAt.toISOString(),
+      expiresAt: doc.expiresAt,
       ttlSeconds: CHECK_IN_TOKEN_TTL_SECONDS,
     };
   },
@@ -113,12 +99,7 @@ export const checkIn = onCall(async (request: CallableRequest<{ shopId?: string;
     const sSnap = await tx.get(sRef);
 
     const tokenData = tokenSnap.exists ? (tokenSnap.data() as CheckInTokenDoc) : null;
-    const tokenInvalid =
-      tokenData === null ||
-      tokenData.shopId !== shopId ||
-      tokenData.used === true ||
-      new Date(tokenData.expiresAt).getTime() < Date.now();
-    if (tokenInvalid) {
+    if (!isCheckInTokenValid(tokenData, shopId, Date.now())) {
       return {
         status: 'code_invalid' as const,
         streak: undefined as Streak | undefined,
