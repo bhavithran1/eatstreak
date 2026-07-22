@@ -28,80 +28,43 @@ class OwnerQrCodeScreen extends ConsumerStatefulWidget {
   ConsumerState<OwnerQrCodeScreen> createState() => _OwnerQrCodeScreenState();
 }
 
-class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen>
-    with WidgetsBindingObserver {
+class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
   CheckInToken? _token;
   bool _loading = false;
   Object? _error;
-  Timer? _ticker;
-
-  /// Whether the app is foreground-active. Minting a code every 90s while the
-  /// owner is in another app is a function call + a Firestore write for nothing,
-  /// so rotation pauses whenever this is false.
-  bool _foreground = true;
-
-  /// Seconds until the current code auto-refreshes; drives the live countdown.
-  int _remaining = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
+  StreamSubscription<bool>? _usedSub;
+  bool _started = false;
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _ticker?.cancel();
+    _usedSub?.cancel();
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    _foreground = state == AppLifecycleState.resumed;
-    final shopId =
-        _token?.shopId ?? ref.read(storeControllerProvider).value?.ownedShop?.id;
-    if (shopId != null) _reconcile(shopId);
-  }
-
-  /// Bring the rotation in line with visibility: pause when the screen is out of
-  /// view, mint the first (or a stale) code when it's back, otherwise just keep
-  /// the countdown ticking. Called after every build and on lifecycle changes,
-  /// and is idempotent.
-  void _reconcile(String shopId) {
-    if (!mounted) return;
-    final active = _foreground && TickerMode.valuesOf(context).enabled;
-    if (!active) {
-      _ticker?.cancel();
-      _ticker = null;
-      return;
-    }
-    if (_loading || _error != null) return;
-    if (_token == null || _token!.isExpired) {
-      unawaited(_generate(shopId));
-      return;
-    }
-    _ensureTicker(shopId);
-  }
-
-  /// Mint a fresh single-use code and start the countdown to the next one.
+  /// Mint a code and watch for it to be scanned. It stays on screen unchanged
+  /// until a check-in consumes it (or the owner taps "New code"), then the next
+  /// one is minted — there is no timed rotation, so an idle screen costs
+  /// nothing beyond one lightweight listener.
   Future<void> _generate(String shopId) async {
     if (_loading) return;
     setState(() {
       _loading = true;
       _error = null;
     });
+    await _usedSub?.cancel();
+    _usedSub = null;
 
     try {
-      final token =
-          await ref.read(storeControllerProvider.notifier).createCheckInToken(shopId);
+      final store = ref.read(storeControllerProvider.notifier);
+      final token = await store.createCheckInToken(shopId);
       if (!mounted) return;
       setState(() {
         _token = token;
-        _remaining = token.remaining.inSeconds;
         _loading = false;
       });
-      _reconcile(shopId);
+      _usedSub = store.watchCheckInTokenUsed(token.token).listen((used) {
+        if (used && mounted) unawaited(_generate(shopId));
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -109,20 +72,6 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen>
         _loading = false;
       });
     }
-  }
-
-  void _ensureTicker(String shopId) {
-    _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
-      final token = _token;
-      if (token == null) return;
-      final left = token.remaining.inSeconds;
-      if (left <= 0) {
-        // Rotate automatically so an unused code never lingers on screen.
-        unawaited(_generate(shopId));
-      } else if (mounted) {
-        setState(() => _remaining = left);
-      }
-    });
   }
 
   @override
@@ -148,9 +97,14 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen>
       );
     }
 
-    // Keep rotation in sync with visibility after this frame — mint the first
-    // code, resume the countdown, or pause when the tab isn't in view.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _reconcile(shop.id));
+    // Mint the first code once the shop is known. It's replaced only when
+    // scanned, so this runs a single time.
+    if (!_started) {
+      _started = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_generate(shop.id));
+      });
+    }
 
     return AppScreen(
       title: 'Check-in code',
@@ -194,13 +148,11 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen>
         const SizedBox(height: Spacing.md),
         Text(shop.name, style: AppText.heading(size: 20)),
         const SizedBox(height: 2),
-        if (_token != null && _error == null)
-          Text(
-            'Refreshes in ${_remaining}s · works once',
-            style: AppText.body(size: 13),
-          )
-        else
-          Text('Each code works once', style: AppText.body(size: 13)),
+        Text(
+          'Works once — a new code appears after each scan',
+          textAlign: TextAlign.center,
+          style: AppText.body(size: 13),
+        ),
         const SizedBox(height: Spacing.md),
         GradientButton(
           label: 'New code',
@@ -266,11 +218,10 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen>
             _tip(Icons.qr_code_scanner,
                 'They open EatStreak and scan to log the visit'),
             const SizedBox(height: Spacing.md),
-            _tip(Icons.lock_clock_outlined,
-                'Each code works once and refreshes automatically'),
+            _tip(Icons.lock_outline,
+                'Each code works once — the next appears after every scan'),
             const SizedBox(height: Spacing.md),
-            _tip(Icons.refresh,
-                'Tap "New code" for the next customer in line'),
+            _tip(Icons.refresh, 'Tap "New code" any time you want a fresh one'),
           ],
         ),
       );

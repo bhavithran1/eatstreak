@@ -57,6 +57,10 @@ abstract interface class EatStreakRepository {
   /// check-in to it so a screenshot can't be replayed.
   Future<CheckInToken> createCheckInToken(String shopId);
 
+  /// Emits `true` once the given code has been consumed by a check-in, so the
+  /// owner's screen can show the next code. The owner may only watch their own.
+  Stream<bool> watchCheckInTokenUsed(String token);
+
   /// Record a check-in for the signed-in user; runs streak + voucher logic.
   /// [token] is the single-use code scanned from the owner's screen.
   Future<VisitResult> checkIn(String shopId, {String? token});

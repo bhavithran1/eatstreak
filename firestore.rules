@@ -73,10 +73,14 @@ service cloud.firestore {
     }
 
     // Single-use check-in codes. Minted and consumed only by Cloud Functions
-    // (Admin SDK), never touched by clients — a client that could read or write
-    // these could forge or replay a check-in.
+    // (Admin SDK) — clients can never write, so a code can't be forged or
+    // replayed. The owner may *read* their own codes so their screen can tell
+    // when one has been scanned and show the next; a customer can't read
+    // another shop's codes, and reading only exposes the used/expiry status of
+    // a code the owner already holds.
     match /checkInTokens/{token} {
-      allow read, write: if false;
+      allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow write: if false;
     }
 
     // Customer "suggest a shop from an external QR" flow. Create-only.

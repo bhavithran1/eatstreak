@@ -16,13 +16,6 @@ class CheckInToken {
   final DateTime expiresAt;
   final int ttlSeconds;
 
-  Duration get remaining {
-    final left = expiresAt.difference(DateTime.now());
-    return left.isNegative ? Duration.zero : left;
-  }
-
-  bool get isExpired => remaining == Duration.zero;
-
   factory CheckInToken.fromJson(Map<String, dynamic> json) => CheckInToken(
         token: json['token'] as String,
         shopId: json['shopId'] as String,

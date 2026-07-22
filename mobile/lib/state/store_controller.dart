@@ -122,6 +122,10 @@ class StoreController extends AsyncNotifier<StoreState> {
   Future<CheckInToken> createCheckInToken(String shopId) =>
       _repo.createCheckInToken(shopId);
 
+  /// Emits `true` once the owner's current code has been scanned.
+  Stream<bool> watchCheckInTokenUsed(String token) =>
+      _repo.watchCheckInTokenUsed(token);
+
   /// Record a check-in and fold the result into local state, so the success
   /// screen and home reflect it without a round trip.
   Future<VisitResult> checkIn(String shopId, {String? token}) async {

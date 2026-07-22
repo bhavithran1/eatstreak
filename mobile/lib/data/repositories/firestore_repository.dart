@@ -153,6 +153,13 @@ class FirestoreRepository implements EatStreakRepository {
   }
 
   @override
+  Stream<bool> watchCheckInTokenUsed(String token) => _db
+      .collection('checkInTokens')
+      .doc(token)
+      .snapshots()
+      .map((snap) => snap.data()?['used'] == true);
+
+  @override
   Future<VisitResult> checkIn(String shopId, {String? token}) async {
     final result = await _functions.httpsCallable('checkIn').call<Map<String, dynamic>>({
       'shopId': shopId,

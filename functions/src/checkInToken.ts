@@ -3,9 +3,12 @@
 
 import { CheckInTokenDoc } from './types';
 
-// A check-in code is valid for this long, then the owner's screen rotates it.
-// Short enough that a screenshot is useless, long enough to show at a counter.
-export const CHECK_IN_TOKEN_TTL_SECONDS = 90;
+// How long a code stays valid while it sits on the owner's screen. The code is
+// replaced the moment it's scanned (single-use + regenerate-on-use), so this is
+// only a backstop: long enough that a code never expires under a waiting
+// customer, short enough to bound a photographed-but-unscanned code and to let
+// Firestore TTL clean up abandoned codes daily.
+export const CHECK_IN_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 
 /** A freshly minted, unused check-in code document. */
 export function newCheckInTokenDoc(
