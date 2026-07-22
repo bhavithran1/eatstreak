@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["REPLACE_WITH_APPLE_TEAM_ID.com.eatstreak.app"],
+        "components": [{ "/": "/c/*" }],
+        "appID": "REPLACE_WITH_APPLE_TEAM_ID.com.eatstreak.app",
+        "paths": ["/c/*"]
+      }
+    ]
+  }
+}

@@ -1,0 +1,414 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+import '../../core/router/routes.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_spacing.dart';
+import '../../core/theme/app_typography.dart';
+import '../../core/utils/qr_codec.dart';
+import '../../data/models/enums.dart';
+import '../shared/widgets/app_screen.dart';
+import '../shared/widgets/gradient_button.dart';
+import '../shared/widgets/scan_overlay.dart';
+import 'choose_plan_screen.dart';
+
+const _categoryOptions = <({ShopCategory value, String label, IconData icon})>[
+  (value: ShopCategory.coffee, label: 'Coffee', icon: Icons.local_cafe_outlined),
+  (value: ShopCategory.ramen, label: 'Ramen', icon: Icons.ramen_dining_outlined),
+  (value: ShopCategory.pizza, label: 'Pizza', icon: Icons.local_pizza_outlined),
+  (value: ShopCategory.bistro, label: 'Bistro', icon: Icons.wine_bar_outlined),
+  (value: ShopCategory.bakery, label: 'Bakery', icon: Icons.bakery_dining_outlined),
+  (value: ShopCategory.smoothie, label: 'Smoothie', icon: Icons.local_drink_outlined),
+  (value: ShopCategory.brunch, label: 'Brunch', icon: Icons.wb_sunny_outlined),
+  (value: ShopCategory.mexican, label: 'Mexican', icon: Icons.restaurant_outlined),
+  (value: ShopCategory.other, label: 'Other', icon: Icons.storefront_outlined),
+];
+
+enum _Step { scan, confirm }
+
+/// Shop registration, step one of two. Scanning an existing business QR (Google
+/// Maps, a payment code) prefills the name — but it's strictly a shortcut, and
+/// "enter details manually" is always one tap away.
+class RegisterShopScreen extends ConsumerStatefulWidget {
+  const RegisterShopScreen({super.key});
+
+  @override
+  ConsumerState<RegisterShopScreen> createState() => _RegisterShopScreenState();
+}
+
+class _RegisterShopScreenState extends ConsumerState<RegisterShopScreen> {
+  final _controller = MobileScannerController(
+    formats: const [BarcodeFormat.qrCode],
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+
+  _Step _step = _Step.scan;
+  bool _scanned = false;
+  bool? _cameraAvailable;
+  ShopCategory _category = ShopCategory.other;
+  String _sourceQr = '';
+  ExternalQrType? _qrType;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_checkCamera());
+  }
+
+  Future<void> _checkCamera() async {
+    var status = await Permission.camera.status;
+    if (status.isDenied) status = await Permission.camera.request();
+    if (mounted) setState(() => _cameraAvailable = status.isGranted);
+  }
+
+  @override
+  void dispose() {
+    unawaited(_controller.dispose());
+    _nameController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  void _onDetect(BarcodeCapture capture) {
+    if (_scanned) return;
+    final raw = capture.barcodes
+        .map((b) => b.rawValue)
+        .firstWhere((v) => v != null && v.isNotEmpty, orElse: () => null);
+    if (raw == null) return;
+
+    final parsed = parseExternalQr(raw);
+    setState(() {
+      _scanned = true;
+      _sourceQr = raw;
+      _qrType = parsed.type;
+      if (parsed.extractedName != null && parsed.extractedName!.isNotEmpty) {
+        _nameController.text = parsed.extractedName!;
+      }
+      _step = _Step.confirm;
+    });
+  }
+
+  void _proceed() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) return;
+
+    context.push(
+      Routes.choosePlan,
+      extra: ChoosePlanArgs(
+        shopName: name,
+        category: _category,
+        description: _descriptionController.text.trim(),
+        sourceQr: _sourceQr,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      _step == _Step.confirm ? _confirmStep() : _scanStep();
+
+  // ---- step 1: scan --------------------------------------------------------
+
+  Widget _scanStep() {
+    if (_cameraAvailable == null) {
+      return const Scaffold(
+        backgroundColor: AppColors.bg,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_cameraAvailable == false) return _noCameraStep();
+
+    final size = MediaQuery.sizeOf(context);
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          MobileScanner(controller: _controller, onDetect: _onDetect),
+          ScanOverlay(scanSize: size.width * 0.65),
+          SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(Spacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: _backButton(
+                          () => context.canPop()
+                              ? context.pop()
+                              : context.go(Routes.ownerDashboard),
+                        ),
+                      ),
+                      const SizedBox(height: Spacing.md),
+                      Text(
+                        'Scan your shop QR',
+                        style: AppText.heading(size: 20, weight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: Spacing.xs),
+                      Text(
+                        'Google Maps, payment, or any business QR',
+                        style: AppText.body(size: 14),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.all(Spacing.xl),
+                  child: GradientButton(
+                    label: 'Enter details manually',
+                    variant: GradientButtonVariant.outline,
+                    expand: true,
+                    onPressed: () => setState(() => _step = _Step.confirm),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _noCameraStep() => Scaffold(
+        backgroundColor: AppColors.bg,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Spacing.xl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: AppColors.primaryBorder),
+                    ),
+                    child: const Icon(
+                      Icons.qr_code_scanner,
+                      size: 30,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: Spacing.md),
+                  Text(
+                    'Scan your shop QR',
+                    textAlign: TextAlign.center,
+                    style: AppText.heading(size: 22, weight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: Spacing.sm),
+                  Text(
+                    'Scan an existing QR code (Google Maps, payment QR, etc.) '
+                    "and we'll detect your shop name automatically.",
+                    textAlign: TextAlign.center,
+                    style: AppText.body(size: 15, height: 1.45),
+                  ),
+                  const SizedBox(height: Spacing.lg),
+                  GradientButton(
+                    label: 'Allow camera',
+                    icon: Icons.photo_camera_outlined,
+                    onPressed: () => unawaited(openAppSettings()),
+                  ),
+                  const SizedBox(height: Spacing.md),
+                  GestureDetector(
+                    onTap: () => setState(() => _step = _Step.confirm),
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.all(Spacing.sm),
+                      child: Text(
+                        'Enter details manually instead',
+                        style: AppText.body(
+                          size: 14,
+                          weight: FontWeight.w500,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+  // ---- step 2: confirm -----------------------------------------------------
+
+  Widget _confirmStep() => AppScreen(
+        onBack: () => setState(() {
+          _step = _Step.scan;
+          _scanned = false;
+        }),
+        title: _sourceQr.isEmpty ? 'Enter your shop details' : 'Confirm your shop',
+        children: [
+          if (_qrType == ExternalQrType.googleMaps)
+            _detectedBadge(Icons.place, 'Extracted from Google Maps')
+          else if (_qrType == ExternalQrType.upi)
+            _detectedBadge(Icons.credit_card, 'Extracted from payment QR'),
+          const SizedBox(height: Spacing.lg),
+          _label('Shop name'),
+          TextField(
+            controller: _nameController,
+            onChanged: (_) => setState(() {}),
+            textCapitalization: TextCapitalization.words,
+            style: AppText.body(size: 16, color: AppColors.ink),
+            decoration: _inputDecoration("e.g. Nonna's Kitchen"),
+          ),
+          const SizedBox(height: Spacing.lg),
+          _label('Category'),
+          Wrap(
+            spacing: Spacing.sm,
+            runSpacing: Spacing.sm,
+            children: [
+              for (final opt in _categoryOptions) _categoryChip(opt),
+            ],
+          ),
+          const SizedBox(height: Spacing.lg),
+          _label('Description (optional)'),
+          TextField(
+            controller: _descriptionController,
+            maxLines: 3,
+            style: AppText.body(size: 16, color: AppColors.ink),
+            decoration: _inputDecoration(
+              'Tell customers what makes your food special…',
+            ),
+          ),
+          const SizedBox(height: Spacing.xl),
+          GradientButton(
+            label: 'Choose reward plan',
+            size: GradientButtonSize.lg,
+            expand: true,
+            onPressed: _nameController.text.trim().isEmpty ? null : _proceed,
+          ),
+        ],
+      );
+
+  Widget _label(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: Spacing.sm),
+        child: Text(text, style: AppText.heading(size: 15)),
+      );
+
+  InputDecoration _inputDecoration(String hint) => InputDecoration(
+        filled: true,
+        fillColor: AppColors.card,
+        hintText: hint,
+        hintStyle: AppText.body(size: 16, color: AppColors.muted2),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: 14,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: Radii.mdAll,
+          borderSide: const BorderSide(color: AppColors.line),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: Radii.mdAll,
+          borderSide: const BorderSide(color: AppColors.primary),
+        ),
+      );
+
+  Widget _categoryChip(({ShopCategory value, String label, IconData icon}) opt) {
+    final selected = _category == opt.value;
+
+    return GestureDetector(
+      onTap: () => setState(() => _category = opt.value),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.md,
+          vertical: 10,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.card,
+          borderRadius: Radii.pillAll,
+          border: Border.all(
+            color: selected ? AppColors.primary : AppColors.line,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              opt.icon,
+              size: 16,
+              color: selected ? AppColors.primaryInk : AppColors.muted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              opt.label,
+              style: AppText.body(
+                size: 13,
+                weight: FontWeight.w500,
+                color: selected ? AppColors.primaryInk : AppColors.muted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detectedBadge(IconData icon, String text) => Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.success.withValues(alpha: 0.08),
+            borderRadius: Radii.pillAll,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: AppColors.success),
+              const SizedBox(width: 6),
+              Text(
+                text,
+                style: AppText.body(
+                  size: 12,
+                  weight: FontWeight.w600,
+                  color: AppColors.success,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _backButton(VoidCallback onTap) => Semantics(
+        button: true,
+        label: 'Back',
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+            ),
+            child: const Icon(
+              Icons.arrow_back,
+              size: 20,
+              color: AppColors.ink,
+            ),
+          ),
+        ),
+      );
+}

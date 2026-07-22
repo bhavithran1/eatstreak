@@ -1,0 +1,87 @@
+rules_version = '2';
+
+// EatStreak Firestore security rules.
+//
+// Core principle: streaks / vouchers / visits are NEVER written by clients.
+// They are mutated only by Cloud Functions running the Admin SDK, which
+// bypasses these rules. That makes the reward economy cheat-proof — a
+// customer cannot fabricate a streak, mint a voucher, or self-redeem.
+//
+// Reads are scoped: a user sees their own docs (userId == uid), and a shop
+// owner sees docs for their shops (shopOwnerId == uid, denormalized by the
+// Cloud Function at write time).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // A user's own profile document. Keyed by Firebase Auth UID.
+    match /users/{uid} {
+      allow read: if isSelf(uid);
+      // Client may create/update its own profile (onboarding: name + role).
+      // Role is immutable once set, and uid/email are pinned to the token.
+      allow create: if isSelf(uid)
+                    && request.resource.data.id == uid
+                    && request.resource.data.role in ['customer', 'owner'];
+      allow update: if isSelf(uid)
+                    && request.resource.data.id == uid
+                    && request.resource.data.role == resource.data.role;
+      allow delete: if false;
+    }
+
+    // Shops are publicly readable (customers browse & scan). Only the owner
+    // may create or edit their own shop; ownerId is pinned to the caller.
+    match /shops/{shopId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+                    && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isSignedIn()
+                    && resource.data.ownerId == request.auth.uid
+                    && request.resource.data.ownerId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Streaks: read own or (as owner) your shop's. All writes via Functions.
+    match /streaks/{streakId} {
+      allow read: if isSignedIn()
+                  && (resource.data.userId == request.auth.uid
+                      || resource.data.shopOwnerId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Visits: read own or (as owner) your shop's. All writes via Functions.
+    match /visits/{visitId} {
+      allow read: if isSignedIn()
+                  && (resource.data.userId == request.auth.uid
+                      || resource.data.shopOwnerId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Vouchers: read own or (as owner) your shop's. All writes via Functions.
+    match /vouchers/{voucherId} {
+      allow read: if isSignedIn()
+                  && (resource.data.userId == request.auth.uid
+                      || resource.data.shopOwnerId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // Customer "suggest a shop from an external QR" flow. Create-only.
+    match /shopSuggestions/{suggestionId} {
+      allow create: if isSignedIn()
+                    && request.resource.data.suggestedBy == request.auth.uid;
+      allow read, update, delete: if false;
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

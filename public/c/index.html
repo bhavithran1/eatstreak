@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Check in — EatStreak</title>
+<meta name="description" content="Open the EatStreak app to log your visit and keep your streak alive." />
+<!-- iOS Smart App Banner. REPLACE_WITH_APP_STORE_ID = numeric App Store ID (visible in
+     App Store Connect after the app is created, e.g. 1234567890). app-argument carries
+     the scanned link into the app when installed via the banner. -->
+<meta name="apple-itunes-app" content="app-id=REPLACE_WITH_APP_STORE_ID" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0807;
+    --card: #14100d;
+    --ink: #fbf6f0;
+    --muted: #b6aca2;
+    --line: rgba(251, 246, 240, 0.1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100svh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(80% 60% at 50% 0%, #17110c 0%, var(--bg) 70%);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    padding: 24px;
+    text-align: center;
+  }
+  .card {
+    max-width: 420px;
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 40px 28px 32px;
+  }
+  .mark { width: 56px; height: 56px; margin: 0 auto 18px; }
+  h1 {
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    font-size: 26px;
+    margin-bottom: 10px;
+  }
+  p { color: var(--muted); font-size: 15px; line-height: 1.55; margin-bottom: 26px; }
+  .open-btn {
+    display: block;
+    background: linear-gradient(135deg, #ffd166, #ff7a18 55%, #ff3d6e);
+    color: #1a0d05;
+    font-weight: 600;
+    font-size: 16px;
+    text-decoration: none;
+    border-radius: 12px;
+    padding: 15px 20px;
+    margin-bottom: 22px;
+  }
+  .stores { display: flex; gap: 10px; justify-content: center; }
+  .store-btn {
+    flex: 1;
+    display: block;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 8px;
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .store-btn span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 2px; }
+  .fineprint { margin-top: 22px; font-size: 12px; color: var(--muted); }
+  .fineprint a { color: var(--muted); }
+</style>
+</head>
+<body>
+<main class="card">
+  <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+    <path d="M16 2c2 5-1 7-1 10a4 4 0 0 0 8 0c0-1 0-2-1-3 4 3 6 7 6 12a12 12 0 1 1-24 0c0-6 5-9 7-13 1-2 4-4 5-6z" fill="url(#flame)"/>
+    <defs>
+      <linearGradient id="flame" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffd166"/>
+        <stop offset="0.5" stop-color="#ff7a18"/>
+        <stop offset="1" stop-color="#ff3d6e"/>
+      </linearGradient>
+    </defs>
+  </svg>
+  <h1>Scan complete!</h1>
+  <p>Open EatStreak to log this visit and keep your streak alive. Don't have the app yet? Grab it below — your check-in works on your first scan after signing in.</p>
+  <a class="open-btn" id="open-app" href="eatstreak://">Open in EatStreak</a>
+  <div class="stores">
+    <!-- REPLACE_WITH_APP_STORE_ID = numeric App Store ID from App Store Connect -->
+    <a class="store-btn" href="https://apps.apple.com/app/idREPLACE_WITH_APP_STORE_ID"><span>Download on the</span>App Store</a>
+    <a class="store-btn" href="https://play.google.com/store/apps/details?id=com.eatstreak.app"><span>Get it on</span>Google Play</a>
+  </div>
+  <p class="fineprint">EatStreak — loyalty streaks for your favourite restaurants.<br /><a href="/">eatstreak home</a></p>
+</main>
+<script>
+  // The /c/** hosting rewrite serves this page for any shop link; recover the shopId
+  // from the path so "Open in EatStreak" retries via the custom scheme (covers
+  // Android browsers where App Links verification failed but the app is installed).
+  var match = location.pathname.match(/\/c\/([^\/?#]+)/);
+  if (match) {
+    document.getElementById('open-app').href =
+      'eatstreak://check-in/' + encodeURIComponent(decodeURIComponent(match[1]));
+  }
+</script>
+</body>
+</html>

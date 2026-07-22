@@ -1,0 +1,30 @@
+# Static analysis config. `flutter analyze` and the IDE both read this.
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  # Generated output and, on iOS, the Swift Package checkouts of our plugin
+  # dependencies land here. Analyzing other people's sources buries our own.
+  exclude:
+    - build/**
+    - ios/**
+    - android/**
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+
+  errors:
+    # A missing return type or an unawaited future is a bug waiting to happen,
+    # not a style note.
+    always_declare_return_types: error
+    unawaited_futures: error
+
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_print
+    - prefer_single_quotes
+    - prefer_final_locals
+    - require_trailing_commas
+    - unawaited_futures
+    - use_super_parameters
+    - sort_child_properties_last
+    - unnecessary_parenthesis

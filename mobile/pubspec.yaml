@@ -1,0 +1,69 @@
+name: eatstreak
+description: "EatStreak — restaurant loyalty streaks and rewards."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State + routing
+  flutter_riverpod: ^3.3.2
+  go_router: ^17.3.0
+
+  # Storage + formatting
+  shared_preferences: ^2.5.5
+  intl: ^0.20.3
+
+  # UI
+  cupertino_icons: ^1.0.8
+  google_fonts: ^8.2.0
+
+  # QR: generate the shop's check-in code, scan a customer's camera feed
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.4.0
+
+  # Backend. Only touched when demo mode is off — see core/config/env.dart.
+  firebase_core: ^4.12.1
+  firebase_auth: ^6.5.6
+  cloud_firestore: ^6.7.1
+  cloud_functions: ^6.3.5
+  google_sign_in: ^7.2.0
+  sign_in_with_apple: ^8.1.0
+  crypto: ^3.0.7
+  permission_handler: ^12.0.3
+  share_plus: ^13.2.1
+  app_links: ^7.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+
+# App icons, generated from the brand artwork in assets/ (carried over from the
+# Expo app). Regenerate after changing any source image:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/icon.png"
+  ios: true
+  # The App Store rejects icons with an alpha channel; the source has a solid
+  # background anyway, so flattening it is lossless here.
+  remove_alpha_ios: true
+  android: true
+  # Android 8+ composites these two layers and can mask them to any shape.
+  adaptive_icon_background: "assets/android-icon-background.png"
+  adaptive_icon_foreground: "assets/android-icon-foreground.png"
+  # Themed-icon layer for Android 13+ monochrome home screens.
+  adaptive_icon_monochrome: "assets/android-icon-monochrome.png"
+  web:
+    generate: true
+    image_path: "assets/favicon.png"
+    background_color: "#090e17"
+    theme_color: "#79a7ff"
