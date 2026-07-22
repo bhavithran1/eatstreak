@@ -73,9 +73,20 @@ export interface Voucher {
 }
 
 export interface VisitResult {
-  status: 'success' | 'already_visited_today' | 'shop_not_found';
+  status: 'success' | 'already_visited_today' | 'shop_not_found' | 'code_invalid';
   streak?: Streak;
   visit?: Visit;
   newVouchers?: Voucher[];
   shop?: Shop;
+}
+
+// A single-use, short-lived check-in code minted by the owner at checkout.
+export interface CheckInTokenDoc {
+  shopId: string;
+  ownerId: string;
+  createdAt: string;
+  expiresAt: string;
+  used: boolean;
+  usedBy: string | null;
+  usedAt: string | null;
 }

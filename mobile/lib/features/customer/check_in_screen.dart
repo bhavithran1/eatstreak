@@ -24,9 +24,12 @@ import 'shop_not_found_screen.dart';
 /// check-in and resumed after sign-in. All that's left is to run it once the
 /// store has loaded, and land on the same destinations as the in-app scanner.
 class CheckInScreen extends ConsumerStatefulWidget {
-  const CheckInScreen({super.key, required this.shopId});
+  const CheckInScreen({super.key, required this.shopId, this.token});
 
   final String shopId;
+
+  /// Single-use code carried on the scanned link (`?t=`), when present.
+  final String? token;
 
   @override
   ConsumerState<CheckInScreen> createState() => _CheckInScreenState();
@@ -97,6 +100,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
       outcome = await runCheckIn(
         widget.shopId,
         ref.read(storeControllerProvider.notifier).checkIn,
+        token: widget.token,
       );
     } catch (e) {
       if (!mounted) return;
@@ -110,6 +114,10 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
     switch (outcome) {
       case CheckInAlreadyToday():
         AppToast.show(context, outcome.message, type: ToastType.info);
+        context.go(Routes.customerHome);
+
+      case CheckInCodeInvalid():
+        AppToast.show(context, outcome.message, type: ToastType.error);
         context.go(Routes.customerHome);
 
       case CheckInUnknownShop():

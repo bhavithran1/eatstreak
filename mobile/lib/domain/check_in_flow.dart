@@ -41,19 +41,31 @@ class CheckInUnknownShop extends CheckInOutcome {
   final String? extractedName;
 }
 
-/// Run a check-in and decide where it goes. [rawData] is the scanned payload,
-/// used only to prefill the suggestion form when the shop isn't a partner.
+/// A partner shop, but the single-use code was missing, already used, or
+/// expired. Toast and let them re-scan — the fix is a fresh code from staff.
+class CheckInCodeInvalid extends CheckInOutcome {
+  const CheckInCodeInvalid();
+
+  String get message =>
+      'This check-in code is no longer valid. Ask staff for a fresh one.';
+}
+
+/// Run a check-in and decide where it goes. [token] is the single-use code
+/// carried by the QR; [rawData] is the scanned payload, used only to prefill
+/// the suggestion form when the shop isn't a partner.
 Future<CheckInOutcome> runCheckIn(
   String shopId,
-  Future<VisitResult> Function(String shopId) checkIn, {
+  Future<VisitResult> Function(String shopId, {String? token}) checkIn, {
+  String? token,
   String? rawData,
 }) async {
-  final result = await checkIn(shopId);
+  final result = await checkIn(shopId, token: token);
 
   return switch (result.status) {
     CheckInStatus.alreadyVisitedToday => const CheckInAlreadyToday(),
     CheckInStatus.shopNotFound =>
       CheckInUnknownShop(qrData: rawData ?? shopId),
+    CheckInStatus.codeInvalid => const CheckInCodeInvalid(),
     CheckInStatus.success => CheckInRecorded(
         shopId: shopId,
         streakDays: result.streak?.currentStreakDays ?? 1,

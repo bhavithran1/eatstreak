@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -13,6 +14,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/utils/qr_codec.dart';
 import '../../data/models/enums.dart';
 import '../shared/widgets/app_screen.dart';
+import '../shared/widgets/app_toast.dart';
 import '../shared/widgets/gradient_button.dart';
 import '../shared/widgets/scan_overlay.dart';
 import 'choose_plan_screen.dart';
@@ -82,7 +84,10 @@ class _RegisterShopScreenState extends ConsumerState<RegisterShopScreen> {
         .map((b) => b.rawValue)
         .firstWhere((v) => v != null && v.isNotEmpty, orElse: () => null);
     if (raw == null) return;
+    _handleRawQr(raw);
+  }
 
+  void _handleRawQr(String raw) {
     final parsed = parseExternalQr(raw);
     setState(() {
       _scanned = true;
@@ -93,6 +98,31 @@ class _RegisterShopScreenState extends ConsumerState<RegisterShopScreen> {
       }
       _step = _Step.confirm;
     });
+  }
+
+  /// Import a QR from a saved photo — the alternative to live-scanning for
+  /// owners whose code lives in their camera roll rather than in front of them.
+  Future<void> _pickFromGallery() async {
+    final file =
+        await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (file == null || !mounted) return;
+
+    final capture = await _controller.analyzeImage(file.path);
+    final raw = capture?.barcodes
+        .map((b) => b.rawValue)
+        .firstWhere((v) => v != null && v.isNotEmpty, orElse: () => null);
+
+    if (!mounted) return;
+    if (raw == null) {
+      AppToast.show(
+        context,
+        "Couldn't find a QR code in that photo. Try another, or enter details "
+        'manually.',
+        type: ToastType.error,
+      );
+      return;
+    }
+    _handleRawQr(raw);
   }
 
   void _proceed() {
@@ -165,7 +195,27 @@ class _RegisterShopScreenState extends ConsumerState<RegisterShopScreen> {
                 ),
                 const Spacer(),
                 Padding(
-                  padding: const EdgeInsets.all(Spacing.xl),
+                  padding: const EdgeInsets.fromLTRB(
+                    Spacing.xl,
+                    Spacing.xl,
+                    Spacing.xl,
+                    Spacing.md,
+                  ),
+                  child: GradientButton(
+                    label: 'Upload QR from gallery',
+                    icon: Icons.photo_library_outlined,
+                    variant: GradientButtonVariant.outline,
+                    expand: true,
+                    onPressed: () => unawaited(_pickFromGallery()),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    Spacing.xl,
+                    0,
+                    Spacing.xl,
+                    Spacing.xl,
+                  ),
                   child: GradientButton(
                     label: 'Enter details manually',
                     variant: GradientButtonVariant.outline,
@@ -222,6 +272,13 @@ class _RegisterShopScreenState extends ConsumerState<RegisterShopScreen> {
                     label: 'Allow camera',
                     icon: Icons.photo_camera_outlined,
                     onPressed: () => unawaited(openAppSettings()),
+                  ),
+                  const SizedBox(height: Spacing.md),
+                  GradientButton(
+                    label: 'Upload QR from gallery',
+                    icon: Icons.photo_library_outlined,
+                    variant: GradientButtonVariant.outline,
+                    onPressed: () => unawaited(_pickFromGallery()),
                   ),
                   const SizedBox(height: Spacing.md),
                   GestureDetector(

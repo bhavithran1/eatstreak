@@ -101,10 +101,13 @@
   // The /c/** hosting rewrite serves this page for any shop link; recover the shopId
   // from the path so "Open in EatStreak" retries via the custom scheme (covers
   // Android browsers where App Links verification failed but the app is installed).
+  // The single-use code rides along in ?t= and is forwarded to the app.
   var match = location.pathname.match(/\/c\/([^\/?#]+)/);
   if (match) {
-    document.getElementById('open-app').href =
-      'eatstreak://check-in/' + encodeURIComponent(decodeURIComponent(match[1]));
+    var token = new URLSearchParams(location.search).get('t');
+    var href = 'eatstreak://check-in/' + encodeURIComponent(decodeURIComponent(match[1]));
+    if (token) href += '?t=' + encodeURIComponent(token);
+    document.getElementById('open-app').href = href;
   }
 </script>
 </body>

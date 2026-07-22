@@ -55,6 +55,8 @@
 	<string>Main</string>
 	<key>NSCameraUsageDescription</key>
 	<string>EatStreak uses the camera to scan restaurant QR codes so your visit can be recorded and your streak kept alive.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>EatStreak reads QR codes from photos you choose so you can import a shop's code from your gallery.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

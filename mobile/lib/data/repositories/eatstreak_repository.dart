@@ -1,3 +1,4 @@
+import '../models/check_in_token.dart';
 import '../models/shop.dart';
 import '../models/streak.dart';
 import '../models/user.dart';
@@ -51,8 +52,14 @@ abstract interface class EatStreakRepository {
   });
 
   // ---- authoritative mutations ---------------------------------------------
+  /// Mint a single-use, short-lived check-in code for a shop the caller owns.
+  /// The owner's device shows this at checkout; the server ties the resulting
+  /// check-in to it so a screenshot can't be replayed.
+  Future<CheckInToken> createCheckInToken(String shopId);
+
   /// Record a check-in for the signed-in user; runs streak + voucher logic.
-  Future<VisitResult> checkIn(String shopId);
+  /// [token] is the single-use code scanned from the owner's screen.
+  Future<VisitResult> checkIn(String shopId, {String? token});
 
   /// Redeem a voucher. Double-redeem is rejected.
   Future<Voucher> redeemVoucher(String voucherId);

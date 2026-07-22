@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -84,11 +86,25 @@ class _ChoosePlanScreenState extends ConsumerState<ChoosePlanScreen> {
 
     try {
       final store = ref.read(storeControllerProvider.notifier);
-      await store.registerShop(shop);
+      // Each write is capped so a dropped connection surfaces as an error
+      // instead of leaving the Confirm button spinning forever. registerShop
+      // optimistically folds the shop into state, and switchRole re-runs
+      // build() off the auth change — so there's no separate refresh() to wait
+      // on, which previously doubled the round trips on a slow link.
+      await store.registerShop(shop).timeout(const Duration(seconds: 20));
       if (user.role != UserRole.owner) {
-        await store.switchRole(UserRole.owner);
+        await store.switchRole(UserRole.owner).timeout(const Duration(seconds: 20));
       }
-      await store.refresh();
+    } on TimeoutException {
+      if (mounted) {
+        setState(() => _submitting = false);
+        AppToast.show(
+          context,
+          "Couldn't reach the server. Check your connection and try again.",
+          type: ToastType.error,
+        );
+      }
+      return;
     } catch (e) {
       if (mounted) {
         setState(() => _submitting = false);

@@ -72,6 +72,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Single-use check-in codes. Minted and consumed only by Cloud Functions
+    // (Admin SDK), never touched by clients — a client that could read or write
+    // these could forge or replay a check-in.
+    match /checkInTokens/{token} {
+      allow read, write: if false;
+    }
+
     // Customer "suggest a shop from an external QR" flow. Create-only.
     match /shopSuggestions/{suggestionId} {
       allow create: if isSignedIn()

@@ -37,10 +37,10 @@ class DeepLinkService {
   }
 
   void _handle(Uri uri) {
-    final shopId = parseCheckInTarget(uri.toString());
+    final target = parseCheckInTarget(uri.toString());
     // Anything that isn't a check-in link is not ours to route.
-    if (shopId == null) return;
-    _router.go(Routes.checkInFor(shopId));
+    if (target == null) return;
+    _router.go(Routes.checkInFor(target.shopId, token: target.token));
   }
 
   void dispose() {

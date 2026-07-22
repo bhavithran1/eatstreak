@@ -1,8 +1,9 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
+import { randomBytes } from 'crypto';
 
-import { Shop, Streak, Visit, Voucher, VisitResult } from './types';
+import { Shop, Streak, Visit, Voucher, VisitResult, CheckInTokenDoc } from './types';
 import { toDateStringInTZ, DEFAULT_TIME_ZONE, addDays } from './dates';
 import { computeCheckIn, qualifyingTiers, generateVoucherCode, StreakCore } from './streakLogic';
 
@@ -15,13 +16,62 @@ setGlobalOptions({ region: 'asia-southeast1', maxInstances: 10 });
 const streakId = (uid: string, shopId: string) => `${uid}_${shopId}`;
 const voucherId = (uid: string, tierId: string) => `${uid}_${tierId}`;
 
+// A check-in code is valid for this long, then the owner's screen rotates it.
+// Short enough that a screenshot is useless, long enough to show at a counter.
+const CHECK_IN_TOKEN_TTL_SECONDS = 90;
+
+/**
+ * Mint a single-use check-in code for a shop the caller owns. The owner's
+ * device shows this at checkout; `checkIn` consumes it, so a screenshot can't
+ * be replayed and a saved code can't be scanned from home.
+ */
+export const createCheckInToken = onCall(
+  async (request: CallableRequest<{ shopId?: string }>) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+
+    const shopId = request.data?.shopId;
+    if (!shopId || typeof shopId !== 'string') {
+      throw new HttpsError('invalid-argument', 'shopId is required.');
+    }
+
+    const shopSnap = await db.collection('shops').doc(shopId).get();
+    if (!shopSnap.exists) throw new HttpsError('not-found', 'Shop not found.');
+    if ((shopSnap.data() as Shop).ownerId !== uid) {
+      throw new HttpsError('permission-denied', 'Only the shop owner can create a check-in code.');
+    }
+
+    const token = randomBytes(18).toString('base64url');
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + CHECK_IN_TOKEN_TTL_SECONDS * 1000);
+
+    const doc: CheckInTokenDoc = {
+      shopId,
+      ownerId: uid,
+      createdAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      used: false,
+      usedBy: null,
+      usedAt: null,
+    };
+    await db.collection('checkInTokens').doc(token).set(doc);
+
+    return {
+      token,
+      shopId,
+      expiresAt: expiresAt.toISOString(),
+      ttlSeconds: CHECK_IN_TOKEN_TTL_SECONDS,
+    };
+  },
+);
+
 /**
  * Server-authoritative check-in. Replaces the old on-device registerVisit().
  * Runs the entire streak + voucher update inside a Firestore transaction so
  * concurrent scans can't double-count, and clients can never write these docs
  * directly (security rules deny all client writes to streaks/visits/vouchers).
  */
-export const checkIn = onCall(async (request: CallableRequest<{ shopId?: string }>): Promise<VisitResult> => {
+export const checkIn = onCall(async (request: CallableRequest<{ shopId?: string; token?: string }>): Promise<VisitResult> => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'You must be signed in to check in.');
 
@@ -29,6 +79,15 @@ export const checkIn = onCall(async (request: CallableRequest<{ shopId?: string 
   if (!shopId || typeof shopId !== 'string') {
     throw new HttpsError('invalid-argument', 'shopId is required.');
   }
+
+  // Every check-in must carry a single-use code the owner minted at checkout.
+  // A bare shop link, a stale QR, or a screenshot has no valid code, so it
+  // resolves to `code_invalid` rather than logging a visit.
+  const token = request.data?.token;
+  if (!token || typeof token !== 'string') {
+    return { status: 'code_invalid' };
+  }
+  const tokenRef = db.collection('checkInTokens').doc(token);
 
   const shopSnap = await db.collection('shops').doc(shopId).get();
   if (!shopSnap.exists) {
@@ -47,7 +106,29 @@ export const checkIn = onCall(async (request: CallableRequest<{ shopId?: string 
   const sRef = db.collection('streaks').doc(streakId(uid, shopId));
 
   const result = await db.runTransaction(async (tx) => {
+    // Reads first (Firestore requires all reads before any write). Validate the
+    // single-use code and consume it in the same transaction, so two concurrent
+    // scans of one code can't both succeed.
+    const tokenSnap = await tx.get(tokenRef);
     const sSnap = await tx.get(sRef);
+
+    const tokenData = tokenSnap.exists ? (tokenSnap.data() as CheckInTokenDoc) : null;
+    const tokenInvalid =
+      tokenData === null ||
+      tokenData.shopId !== shopId ||
+      tokenData.used === true ||
+      new Date(tokenData.expiresAt).getTime() < Date.now();
+    if (tokenInvalid) {
+      return {
+        status: 'code_invalid' as const,
+        streak: undefined as Streak | undefined,
+        newVouchers: [] as Voucher[],
+        visit: undefined as Visit | undefined,
+      };
+    }
+    const consumeToken = () =>
+      tx.update(tokenRef, { used: true, usedBy: uid, usedAt: nowIso });
+
     const existing = sSnap.exists ? (sSnap.data() as Streak) : null;
     const existingCore: StreakCore | null = existing
       ? {
@@ -72,6 +153,9 @@ export const checkIn = onCall(async (request: CallableRequest<{ shopId?: string 
     };
 
     if (status === 'already_visited_today') {
+      // Still consume the code — it was a real, present scan, just a repeat
+      // today. Leaving it unused would let someone else reuse the same code.
+      consumeToken();
       return { status, streak: fullStreak, newVouchers: [] as Voucher[], visit: undefined as Visit | undefined };
     }
 
@@ -84,6 +168,7 @@ export const checkIn = onCall(async (request: CallableRequest<{ shopId?: string 
     const tiersToMint = candidateTiers.filter((_, i) => !voucherSnaps[i].exists);
 
     // ---- writes ----
+    consumeToken();
     const visitRef = db.collection('visits').doc();
     const visit: Visit = {
       id: visitRef.id,

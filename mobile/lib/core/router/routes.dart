@@ -27,5 +27,10 @@ abstract final class Routes {
 
   /// Deep link target: `eatstreak://check-in/<shopId>` and `https://<host>/c/<id>`.
   static const checkIn = '/check-in/:shopId';
-  static String checkInFor(String shopId) => '/check-in/$shopId';
+  static String checkInFor(String shopId, {String? token}) {
+    final path = '/check-in/${Uri.encodeComponent(shopId)}';
+    return token == null || token.isEmpty
+        ? path
+        : '$path?t=${Uri.encodeComponent(token)}';
+  }
 }

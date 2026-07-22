@@ -49,7 +49,10 @@ enum StreakUrgency { safe, warning, critical, dead }
 enum CheckInStatus {
   success('success'),
   alreadyVisitedToday('already_visited_today'),
-  shopNotFound('shop_not_found');
+  shopNotFound('shop_not_found'),
+  // The check-in code was missing, already used, expired, or for another shop.
+  // Single-use codes make this the normal "scanned a stale QR" outcome.
+  codeInvalid('code_invalid');
 
   const CheckInStatus(this.wire);
   final String wire;

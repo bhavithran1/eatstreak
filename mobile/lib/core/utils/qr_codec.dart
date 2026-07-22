@@ -19,32 +19,51 @@ Set<String> get _checkInHosts => {
       if (Env.firebaseProjectId.isNotEmpty) '${Env.firebaseProjectId}.firebaseapp.com',
     };
 
-/// The canonical link baked into a shop's QR code.
-String buildCheckInLink(String shopId) =>
-    'https://${Env.linkDomain}/c/${Uri.encodeComponent(shopId)}';
+/// A resolved EatStreak check-in code: the shop it points at, plus the optional
+/// single-use [token] the owner's device minted for this scan.
+typedef CheckInTarget = ({String shopId, String? token});
 
-String encodeQr(String shopId) => buildCheckInLink(shopId);
+/// The canonical link baked into a shop's QR code. When a single-use [token] is
+/// supplied it rides along as `?t=`, so the same link doubles as the rotating
+/// code the owner shows at checkout.
+String buildCheckInLink(String shopId, {String? token}) {
+  final base = 'https://${Env.linkDomain}/c/${Uri.encodeComponent(shopId)}';
+  return token == null || token.isEmpty
+      ? base
+      : '$base?t=${Uri.encodeComponent(token)}';
+}
 
-/// Pull a shopId out of any EatStreak check-in payload. Returns null for
-/// anything that isn't one — the caller then treats it as an external QR.
-String? parseCheckInTarget(String data) {
+String encodeQr(String shopId, {String? token}) =>
+    buildCheckInLink(shopId, token: token);
+
+/// Pull the shop (and any single-use token) out of an EatStreak check-in
+/// payload. Returns null for anything that isn't one — the caller then treats
+/// it as an external QR.
+CheckInTarget? parseCheckInTarget(String data) {
   final trimmed = data.trim();
 
-  // Custom scheme: eatstreak://check-in/<id>
+  // Custom scheme: eatstreak://check-in/<id>[?t=<token>]
   final schemeMatch =
       RegExp(r'^eatstreak://check-in/([^/?#]+)', caseSensitive: false).firstMatch(trimmed);
   if (schemeMatch != null) {
-    return Uri.decodeComponent(schemeMatch.group(1)!);
+    final uri = Uri.tryParse(trimmed);
+    return (
+      shopId: Uri.decodeComponent(schemeMatch.group(1)!),
+      token: uri?.queryParameters['t'],
+    );
   }
 
-  // Universal link: https://<host>/c/<id>
+  // Universal link: https://<host>/c/<id>[?t=<token>]
   if (RegExp(r'^https?://', caseSensitive: false).hasMatch(trimmed)) {
     final uri = Uri.tryParse(trimmed);
     if (uri != null) {
       final host = uri.host.replaceFirst(RegExp(r'^www\.'), '');
       final parts = uri.pathSegments.where((s) => s.isNotEmpty).toList();
       if (_checkInHosts.contains(host) && parts.length >= 2 && parts[0] == 'c') {
-        return Uri.decodeComponent(parts[1]);
+        return (
+          shopId: Uri.decodeComponent(parts[1]),
+          token: uri.queryParameters['t'],
+        );
       }
     }
   }
@@ -53,7 +72,7 @@ String? parseCheckInTarget(String data) {
   try {
     final parsed = jsonDecode(trimmed);
     if (parsed is Map && parsed['s'] != null && parsed['v'] != null) {
-      return parsed['s'].toString();
+      return (shopId: parsed['s'].toString(), token: null);
     }
   } on FormatException {
     // Not JSON — fall through.

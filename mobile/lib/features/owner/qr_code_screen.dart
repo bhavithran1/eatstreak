@@ -1,24 +1,92 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/utils/errors.dart';
 import '../../core/utils/qr_codec.dart';
+import '../../data/models/check_in_token.dart';
+import '../../data/models/shop.dart';
 import '../../state/store_controller.dart';
 import '../shared/widgets/app_screen.dart';
 import '../shared/widgets/empty_state.dart';
+import '../shared/widgets/gradient_button.dart';
 
-/// The shop's check-in code, sized to be printed and stuck on a table.
-class OwnerQrCodeScreen extends ConsumerWidget {
+/// The shop's check-in code — a single-use code the owner shows the customer at
+/// checkout. Each code works once and refreshes on its own, so a screenshot
+/// can't be reused and a saved code can't be scanned from home.
+class OwnerQrCodeScreen extends ConsumerStatefulWidget {
   const OwnerQrCodeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OwnerQrCodeScreen> createState() => _OwnerQrCodeScreenState();
+}
+
+class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
+  CheckInToken? _token;
+  bool _loading = false;
+  Object? _error;
+  Timer? _ticker;
+
+  /// Seconds until the current code auto-refreshes; drives the live countdown.
+  int _remaining = 0;
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  /// Mint a fresh single-use code and (re)start the countdown to the next one.
+  Future<void> _generate(String shopId) async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final token =
+          await ref.read(storeControllerProvider.notifier).createCheckInToken(shopId);
+      if (!mounted) return;
+      setState(() {
+        _token = token;
+        _remaining = token.remaining.inSeconds;
+        _loading = false;
+      });
+      _startTicker(shopId);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _loading = false;
+      });
+    }
+  }
+
+  void _startTicker(String shopId) {
+    _ticker?.cancel();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      final token = _token;
+      if (token == null) return;
+      final left = token.remaining.inSeconds;
+      if (left <= 0) {
+        // Rotate automatically so an unused code never lingers on screen.
+        unawaited(_generate(shopId));
+      } else if (mounted) {
+        setState(() => _remaining = left);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(storeControllerProvider).value ?? const StoreState();
     final shop = state.ownedShop;
 
@@ -30,8 +98,8 @@ class OwnerQrCodeScreen extends ConsumerWidget {
             child: EmptyState(
               icon: Icons.storefront_outlined,
               title: 'No shop yet',
-              subtitle: 'Register your shop before printing or sharing a '
-                  'check-in QR code.',
+              subtitle: 'Register your shop before showing a check-in code to '
+                  'customers.',
               actionLabel: 'Register shop',
               onAction: () => context.push(Routes.registerShop),
             ),
@@ -40,123 +108,135 @@ class OwnerQrCodeScreen extends ConsumerWidget {
       );
     }
 
-    final link = encodeQr(shop.id);
+    // Kick off the first code once the shop is known.
+    if (_token == null && !_loading && _error == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _token == null && !_loading && _error == null) {
+          unawaited(_generate(shop.id));
+        }
+      });
+    }
 
     return AppScreen(
-      title: 'Your QR code',
-      subtitle: 'Customers scan this to check in.',
+      title: 'Check-in code',
+      subtitle: 'Show this at checkout — the customer scans it in their app.',
       children: [
-        Center(
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  borderRadius: Radii.xlAll,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.ember1.withValues(alpha: 0.19),
-                      AppColors.ember2.withValues(alpha: 0.13),
-                      AppColors.ember3.withValues(alpha: 0.06),
-                    ],
-                  ),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.all(Spacing.lg),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: Radii.lgAll,
-                  ),
-                  child: QrImageView(
-                    data: link,
-                    size: 220,
-                    backgroundColor: Colors.white,
-                    // High correction so a scuffed or partly covered printout
-                    // still scans.
-                    errorCorrectionLevel: QrErrorCorrectLevel.H,
-                    eyeStyle: const QrEyeStyle(
-                      eyeShape: QrEyeShape.square,
-                      color: AppColors.primaryInk,
-                    ),
-                    dataModuleStyle: const QrDataModuleStyle(
-                      dataModuleShape: QrDataModuleShape.square,
-                      color: AppColors.primaryInk,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: Spacing.md),
-              Text(shop.name, style: AppText.heading(size: 20)),
-              const SizedBox(height: 2),
-              Text('Scan to earn rewards', style: AppText.body(size: 14)),
-              const SizedBox(height: Spacing.md),
-              _shareButton(context, shop.name, link),
-            ],
+        Center(child: _codePanel(shop)),
+        const SizedBox(height: Spacing.xl),
+        _howItWorks(),
+      ],
+    );
+  }
+
+  Widget _codePanel(Shop shop) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            borderRadius: Radii.xlAll,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.ember1.withValues(alpha: 0.19),
+                AppColors.ember2.withValues(alpha: 0.13),
+                AppColors.ember3.withValues(alpha: 0.06),
+              ],
+            ),
+          ),
+          child: Container(
+            width: 252,
+            height: 252,
+            padding: const EdgeInsets.all(Spacing.lg),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: Radii.lgAll,
+            ),
+            child: Center(child: _qrOrStatus(shop)),
           ),
         ),
-        const SizedBox(height: Spacing.xl),
-        SurfaceCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Tips for placement', style: AppText.heading(size: 15)),
-              const SizedBox(height: Spacing.md),
-              _tip(Icons.restaurant_outlined, 'Place at every table and counter'),
-              const SizedBox(height: Spacing.md),
-              _tip(Icons.print_outlined, 'Print on table tents or stickers'),
-              const SizedBox(height: Spacing.md),
-              _tip(Icons.visibility_outlined, 'Keep it visible and well-lit'),
-              const SizedBox(height: Spacing.md),
-              _tip(
-                Icons.chat_bubble_outline,
-                'Train staff to encourage scanning',
-              ),
-            ],
-          ),
+        const SizedBox(height: Spacing.md),
+        Text(shop.name, style: AppText.heading(size: 20)),
+        const SizedBox(height: 2),
+        if (_token != null && _error == null)
+          Text(
+            'Refreshes in ${_remaining}s · works once',
+            style: AppText.body(size: 13),
+          )
+        else
+          Text('Each code works once', style: AppText.body(size: 13)),
+        const SizedBox(height: Spacing.md),
+        GradientButton(
+          label: 'New code',
+          icon: Icons.refresh,
+          busy: _loading,
+          onPressed: () => unawaited(_generate(shop.id)),
         ),
       ],
     );
   }
 
-  Widget _shareButton(BuildContext context, String shopName, String link) =>
-      GestureDetector(
-        onTap: () => SharePlus.instance.share(
-          ShareParams(
-            title: '$shopName check-in code',
-            text: 'Check in at $shopName on EatStreak and keep your streak '
-                'going: $link',
+  Widget _qrOrStatus(Shop shop) {
+    if (_error != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.wifi_off_rounded, size: 30, color: AppColors.muted),
+          const SizedBox(height: Spacing.sm),
+          Text(
+            friendlyErrorMessage(_error),
+            textAlign: TextAlign.center,
+            style: AppText.body(size: 13, color: AppColors.muted),
           ),
-        ),
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 44),
-          padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: Radii.mdAll,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.ios_share,
-                size: 18,
-                color: AppColors.primaryInk,
-              ),
-              const SizedBox(width: Spacing.sm),
-              Text(
-                'Share check-in code',
-                style: AppText.body(
-                  size: 13,
-                  weight: FontWeight.w600,
-                  color: AppColors.primaryInk,
-                ),
-              ),
-            ],
-          ),
+        ],
+      );
+    }
+
+    final token = _token;
+    if (token == null) {
+      return const SizedBox(
+        width: 26,
+        height: 26,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+
+    return QrImageView(
+      data: buildCheckInLink(shop.id, token: token.token),
+      size: 212,
+      backgroundColor: Colors.white,
+      // High correction so a slight glare on the owner's screen still scans.
+      errorCorrectionLevel: QrErrorCorrectLevel.H,
+      eyeStyle: const QrEyeStyle(
+        eyeShape: QrEyeShape.square,
+        color: AppColors.primaryInk,
+      ),
+      dataModuleStyle: const QrDataModuleStyle(
+        dataModuleShape: QrDataModuleShape.square,
+        color: AppColors.primaryInk,
+      ),
+    );
+  }
+
+  Widget _howItWorks() => SurfaceCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('How it works', style: AppText.heading(size: 15)),
+            const SizedBox(height: Spacing.md),
+            _tip(Icons.point_of_sale_outlined,
+                'Show this screen when the customer pays'),
+            const SizedBox(height: Spacing.md),
+            _tip(Icons.qr_code_scanner,
+                'They open EatStreak and scan to log the visit'),
+            const SizedBox(height: Spacing.md),
+            _tip(Icons.lock_clock_outlined,
+                'Each code works once and refreshes automatically'),
+            const SizedBox(height: Spacing.md),
+            _tip(Icons.refresh,
+                'Tap "New code" for the next customer in line'),
+          ],
         ),
       );
 

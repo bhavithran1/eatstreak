@@ -25,6 +25,8 @@ dependencies:
   # QR: generate the shop's check-in code, scan a customer's camera feed
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.4.0
+  # Pick a saved photo so an owner can import a QR from their gallery.
+  image_picker: ^1.2.0
 
   # Backend. Only touched when demo mode is off — see core/config/env.dart.
   firebase_core: ^4.12.1

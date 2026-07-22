@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/utils/dates.dart';
 import '../../core/utils/formatters.dart';
 import '../../domain/streak_logic.dart';
+import '../models/check_in_token.dart';
 import '../models/enums.dart';
 import '../models/shop.dart';
 import '../models/streak.dart';
@@ -191,7 +192,19 @@ class DemoRepository implements EatStreakRepository {
   // ---- mutations that are server-side in the real backend -------------------
 
   @override
-  Future<VisitResult> checkIn(String shopId) async {
+  Future<CheckInToken> createCheckInToken(String shopId) async {
+    // No server in demo mode — a locally-minted code lets the owner QR screen
+    // demo the rotating code, and demo check-ins don't validate it.
+    return CheckInToken(
+      token: 'demo_${generateId()}',
+      shopId: shopId,
+      expiresAt: DateTime.now().add(const Duration(seconds: 90)),
+      ttlSeconds: 90,
+    );
+  }
+
+  @override
+  Future<VisitResult> checkIn(String shopId, {String? token}) async {
     final data = await _load();
 
     final shop = data.shops.where((s) => s.id == shopId).firstOrNull;

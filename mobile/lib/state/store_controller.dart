@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/models/check_in_token.dart';
 import '../data/models/enums.dart';
 import '../data/models/shop.dart';
 import '../data/models/streak.dart';
@@ -117,10 +118,14 @@ class StoreController extends AsyncNotifier<StoreState> {
     );
   }
 
+  /// Mint a single-use check-in code for the owner's shop to show at checkout.
+  Future<CheckInToken> createCheckInToken(String shopId) =>
+      _repo.createCheckInToken(shopId);
+
   /// Record a check-in and fold the result into local state, so the success
   /// screen and home reflect it without a round trip.
-  Future<VisitResult> checkIn(String shopId) async {
-    final result = await _repo.checkIn(shopId);
+  Future<VisitResult> checkIn(String shopId, {String? token}) async {
+    final result = await _repo.checkIn(shopId, token: token);
     final streak = result.streak;
 
     if (result.isSuccess && streak != null) {

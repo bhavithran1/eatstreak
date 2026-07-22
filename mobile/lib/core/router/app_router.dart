@@ -187,8 +187,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.checkIn,
         parentNavigatorKey: _rootKey,
-        builder: (_, state) =>
-            CheckInScreen(shopId: state.pathParameters['shopId']!),
+        builder: (_, state) => CheckInScreen(
+          shopId: state.pathParameters['shopId']!,
+          token: state.uri.queryParameters['t'],
+        ),
       ),
     ],
     redirect: (context, state) async {

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../core/config/env.dart';
+import '../models/check_in_token.dart';
 import '../models/shop.dart';
 import '../models/streak.dart';
 import '../models/user.dart';
@@ -144,10 +145,19 @@ class FirestoreRepository implements EatStreakRepository {
   // ---- server-authoritative mutations --------------------------------------
 
   @override
-  Future<VisitResult> checkIn(String shopId) async {
+  Future<CheckInToken> createCheckInToken(String shopId) async {
     final result = await _functions
-        .httpsCallable('checkIn')
+        .httpsCallable('createCheckInToken')
         .call<Map<String, dynamic>>({'shopId': shopId});
+    return CheckInToken.fromJson(Map<String, dynamic>.from(result.data));
+  }
+
+  @override
+  Future<VisitResult> checkIn(String shopId, {String? token}) async {
+    final result = await _functions.httpsCallable('checkIn').call<Map<String, dynamic>>({
+      'shopId': shopId,
+      if (token != null && token.isNotEmpty) 'token': token,
+    });
     return VisitResult.fromJson(Map<String, dynamic>.from(result.data));
   }
 

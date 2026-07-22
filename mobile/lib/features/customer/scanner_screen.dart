@@ -82,9 +82,9 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
 
   /// Resolve a scanned payload, then send the user where it belongs.
   Future<void> _route(String raw) async {
-    final shopId = parseCheckInTarget(raw);
+    final target = parseCheckInTarget(raw);
 
-    if (shopId == null) {
+    if (target == null) {
       final parsed = parseExternalQr(raw);
       if (!mounted) return;
       await context.push(
@@ -101,8 +101,9 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
     CheckInOutcome outcome;
     try {
       outcome = await runCheckIn(
-        shopId,
+        target.shopId,
         ref.read(storeControllerProvider.notifier).checkIn,
+        token: target.token,
         rawData: raw,
       );
     } catch (e) {
@@ -118,6 +119,10 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
     switch (outcome) {
       case CheckInAlreadyToday():
         AppToast.show(context, outcome.message, type: ToastType.info);
+        _rearm();
+
+      case CheckInCodeInvalid():
+        AppToast.show(context, outcome.message, type: ToastType.error);
         _rearm();
 
       case CheckInUnknownShop():
