@@ -40,7 +40,14 @@ export const createCheckInToken = onCall(
 
     const token = randomBytes(18).toString('base64url');
     const doc = newCheckInTokenDoc(shopId, uid, new Date());
-    await db.collection('checkInTokens').doc(token).set(doc);
+    await db.collection('checkInTokens').doc(token).set({
+      ...doc,
+      // Timestamp mirror of expiresAt, read only by the Firestore TTL policy so
+      // spent/expired codes auto-delete. The validity logic uses the string
+      // `expiresAt`; single-use still holds even if a doc is cleaned up early,
+      // because an absent token reads as invalid.
+      ttlAt: admin.firestore.Timestamp.fromDate(new Date(doc.expiresAt)),
+    });
 
     return {
       token,

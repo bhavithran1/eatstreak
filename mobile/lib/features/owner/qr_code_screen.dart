@@ -28,22 +28,63 @@ class OwnerQrCodeScreen extends ConsumerStatefulWidget {
   ConsumerState<OwnerQrCodeScreen> createState() => _OwnerQrCodeScreenState();
 }
 
-class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
+class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen>
+    with WidgetsBindingObserver {
   CheckInToken? _token;
   bool _loading = false;
   Object? _error;
   Timer? _ticker;
 
+  /// Whether the app is foreground-active. Minting a code every 90s while the
+  /// owner is in another app is a function call + a Firestore write for nothing,
+  /// so rotation pauses whenever this is false.
+  bool _foreground = true;
+
   /// Seconds until the current code auto-refreshes; drives the live countdown.
   int _remaining = 0;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
     super.dispose();
   }
 
-  /// Mint a fresh single-use code and (re)start the countdown to the next one.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    final shopId =
+        _token?.shopId ?? ref.read(storeControllerProvider).value?.ownedShop?.id;
+    if (shopId != null) _reconcile(shopId);
+  }
+
+  /// Bring the rotation in line with visibility: pause when the screen is out of
+  /// view, mint the first (or a stale) code when it's back, otherwise just keep
+  /// the countdown ticking. Called after every build and on lifecycle changes,
+  /// and is idempotent.
+  void _reconcile(String shopId) {
+    if (!mounted) return;
+    final active = _foreground && TickerMode.valuesOf(context).enabled;
+    if (!active) {
+      _ticker?.cancel();
+      _ticker = null;
+      return;
+    }
+    if (_loading || _error != null) return;
+    if (_token == null || _token!.isExpired) {
+      unawaited(_generate(shopId));
+      return;
+    }
+    _ensureTicker(shopId);
+  }
+
+  /// Mint a fresh single-use code and start the countdown to the next one.
   Future<void> _generate(String shopId) async {
     if (_loading) return;
     setState(() {
@@ -60,7 +101,7 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
         _remaining = token.remaining.inSeconds;
         _loading = false;
       });
-      _startTicker(shopId);
+      _reconcile(shopId);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -70,9 +111,8 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
     }
   }
 
-  void _startTicker(String shopId) {
-    _ticker?.cancel();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+  void _ensureTicker(String shopId) {
+    _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
       final token = _token;
       if (token == null) return;
       final left = token.remaining.inSeconds;
@@ -108,14 +148,9 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
       );
     }
 
-    // Kick off the first code once the shop is known.
-    if (_token == null && !_loading && _error == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _token == null && !_loading && _error == null) {
-          unawaited(_generate(shop.id));
-        }
-      });
-    }
+    // Keep rotation in sync with visibility after this frame — mint the first
+    // code, resume the countdown, or pause when the tab isn't in view.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reconcile(shop.id));
 
     return AppScreen(
       title: 'Check-in code',
