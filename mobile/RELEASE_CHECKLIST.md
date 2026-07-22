@@ -20,24 +20,22 @@ in-app scanner.
 
 ---
 
-## Part 0 — Settle the bundle ID first ⚠️
+## Part 0 — Bundle ID: settled ✅
 
-The Flutter project builds as **`com.eatstreak.eatstreak`** (`flutter create`
-derived it from the folder name). The hosted association files in
-`public/.well-known/` claim **`com.eatstreak.app`**. These disagree, and
-universal links fail *silently* when they do.
+The app builds as **`com.eatstreak.app`** on both platforms. This matches the
+hosted association files in `public/.well-known/`, so universal links can
+resolve (they fail *silently* on a mismatch).
 
-A bundle ID is permanent once the app is on a store. Decide now:
+Set in `PRODUCT_BUNDLE_IDENTIFIER` (`ios/Runner.xcodeproj/project.pbxproj`) and
+`namespace` + `applicationId` (`android/app/build.gradle.kts`). A bundle ID is
+permanent once the app is on a store — use this one consistently in Firebase,
+Apple Developer, and Play.
 
-- **Recommended — rename the app to `com.eatstreak.app`.** It's the cleaner
-  name, it matches what's already hosted, and nothing has shipped yet. Change
-  `PRODUCT_BUNDLE_IDENTIFIER` in `ios/Runner.xcodeproj/project.pbxproj` (3
-  occurrences; the two `RunnerTests` ones keep their `.RunnerTests` suffix) and
-  `namespace` + `applicationId` in `android/app/build.gradle.kts`.
-- **Or keep `com.eatstreak.eatstreak`** and update `package_name` /`appIDs` in
-  both files under `public/.well-known/`.
-
-Whichever you pick, use it consistently in Firebase, Apple Developer, and Play.
+Still to fill in, in `public/.well-known/apple-app-site-association`: replace
+`REPLACE_WITH_APPLE_TEAM_ID` with the Team ID of whichever account ships the
+app. (The personal team used for local device builds is **`NY6RWLXPJ7`**; a
+paid Developer Program account issues its own Team ID, so confirm this before
+publishing.)
 
 ## Part 1 — Accounts and one-time setup (manual)
 

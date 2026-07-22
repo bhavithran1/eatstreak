@@ -36,7 +36,9 @@ Future<FirebaseServices> initializeFirebase() async {
 }
 
 FirebaseOptions _optionsForPlatform() {
-  // Each platform gets its own app id; the rest of the config is shared.
+  // Each platform gets its own app id *and* its own API key — Firebase
+  // restricts them per platform, so crossing the wires fails at runtime rather
+  // than at build time. Both fall back to the web values.
   final appId = switch (defaultTargetPlatform) {
     TargetPlatform.iOS when Env.firebaseIosAppId.isNotEmpty => Env.firebaseIosAppId,
     TargetPlatform.android when Env.firebaseAndroidAppId.isNotEmpty =>
@@ -44,14 +46,23 @@ FirebaseOptions _optionsForPlatform() {
     _ => Env.firebaseAppId,
   };
 
+  final apiKey = switch (defaultTargetPlatform) {
+    TargetPlatform.iOS when Env.firebaseIosApiKey.isNotEmpty => Env.firebaseIosApiKey,
+    TargetPlatform.android when Env.firebaseAndroidApiKey.isNotEmpty =>
+      Env.firebaseAndroidApiKey,
+    _ => Env.firebaseApiKey,
+  };
+
   return FirebaseOptions(
-    apiKey: Env.firebaseApiKey,
+    apiKey: apiKey,
     appId: appId,
     projectId: Env.firebaseProjectId,
     messagingSenderId: Env.firebaseMessagingSenderId,
     authDomain: Env.firebaseAuthDomain.isEmpty ? null : Env.firebaseAuthDomain,
     storageBucket:
         Env.firebaseStorageBucket.isEmpty ? null : Env.firebaseStorageBucket,
+    // Must match PRODUCT_BUNDLE_IDENTIFIER in the Xcode project and the iOS app
+    // registered in the Firebase console.
     iosBundleId: 'com.eatstreak.app',
   );
 }

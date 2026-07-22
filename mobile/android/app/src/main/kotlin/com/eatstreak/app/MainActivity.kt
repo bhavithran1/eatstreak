@@ -1,4 +1,4 @@
-package com.eatstreak.eatstreak
+package com.eatstreak.app
 
 import io.flutter.embedding.android.FlutterActivity
 

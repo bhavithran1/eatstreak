@@ -15,12 +15,10 @@ Repo layout:
 - `mobile/lib/data/repositories/firestore_repository.dart` — Firestore data layer
 - `mobile/lib/data/auth/firebase_auth_service.dart` — Google/Apple sign-in
 
-> **Bundle ID.** The Flutter project currently builds as
-> `com.eatstreak.eatstreak` (`flutter create` derived it from the folder name),
-> but the hosted association files in `public/.well-known/` claim
-> `com.eatstreak.app`. Settle this **before** registering apps in any console —
-> see the first section of `RELEASE_CHECKLIST.md`. Everything below assumes you
-> have picked one and used it consistently.
+> **Bundle ID: `com.eatstreak.app`** on both platforms, matching the hosted
+> association files in `public/.well-known/`. Use this exact string everywhere
+> below — Firebase app registration, the iOS OAuth client, and Play. It is
+> permanent once the app ships.
 
 ---
 

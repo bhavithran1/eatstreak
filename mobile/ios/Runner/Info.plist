@@ -65,6 +65,18 @@
 				<string>eatstreak</string>
 			</array>
 		</dict>
+		<!-- Google Sign-In callback. This is the REVERSED_CLIENT_ID of the iOS
+		     OAuth client in the eatstreak-prod Firebase project; Google returns
+		     to it after authenticating. Without this scheme registered, sign-in
+		     completes in Safari and then never comes back to the app. -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>google-signin</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.606065542930-9tj0mtv8uka2ao87kkdamif47u16fp0k</string>
+			</array>
+		</dict>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>

@@ -12,7 +12,15 @@ abstract final class Env {
   static const bool demoMode = bool.fromEnvironment('DEMO_MODE', defaultValue: true);
 
   // ---- Firebase (ignored while demoMode is true) ---------------------------
+  /// Web/fallback key. Firebase issues a *separate* API key per platform and
+  /// restricts each one — the browser key by HTTP referrer, the mobile keys by
+  /// bundle id — so sending the web key from a phone is rejected. Supply the
+  /// per-platform keys below; firebase_bootstrap.dart picks the right one.
   static const String firebaseApiKey = String.fromEnvironment('FIREBASE_API_KEY');
+  static const String firebaseIosApiKey =
+      String.fromEnvironment('FIREBASE_IOS_API_KEY');
+  static const String firebaseAndroidApiKey =
+      String.fromEnvironment('FIREBASE_ANDROID_API_KEY');
   static const String firebaseAuthDomain = String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
   static const String firebaseProjectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
   static const String firebaseStorageBucket =
