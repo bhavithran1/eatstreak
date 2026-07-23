@@ -14,6 +14,7 @@ import '../../core/utils/formatters.dart';
 import '../../data/models/enums.dart';
 import '../../data/models/shop.dart';
 import '../../domain/discount_plans.dart';
+import '../../domain/subscription.dart';
 import '../../state/store_controller.dart';
 import '../shared/widgets/app_screen.dart';
 import '../shared/widgets/app_toast.dart';
@@ -151,6 +152,8 @@ class _ChoosePlanScreenState extends ConsumerState<ChoosePlanScreen> {
                 ),
                 style: AppText.body(size: 15, height: 1.45),
               ),
+              const SizedBox(height: Spacing.md),
+              _trialBanner(),
               const SizedBox(height: Spacing.lg),
               for (var i = 0; i < discountPlans.length; i++)
                 Padding(
@@ -176,6 +179,54 @@ class _ChoosePlanScreenState extends ConsumerState<ChoosePlanScreen> {
       ),
     );
   }
+
+  /// The free month. Prices are withheld unless [showsPricingInApp] is on —
+  /// see that flag for why showing them here is an App Store problem outside
+  /// the United States.
+  Widget _trialBanner() => Container(
+        padding: const EdgeInsets.all(Spacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.success.withValues(alpha: 0.07),
+          borderRadius: Radii.lgAll,
+          border: Border.all(color: AppColors.success.withValues(alpha: 0.22)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.success.withValues(alpha: 0.1),
+                borderRadius: Radii.mdAll,
+              ),
+              child: const Icon(
+                Icons.card_giftcard_outlined,
+                size: 20,
+                color: AppColors.success,
+              ),
+            ),
+            const SizedBox(width: Spacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Your first month is free',
+                    style: AppText.heading(size: 15),
+                  ),
+                  Text(
+                    showsPricingInApp
+                        ? 'Then RM$monthlyPriceMyr a month. Cancel any time.'
+                        : 'No card needed to start. Every feature is included '
+                            'for $trialDays days.',
+                    style: AppText.body(size: 12, height: 1.35),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
 
   Widget _confirmBar(DiscountPlan plan) {
     final tierCount = plan.visitTiers.length + plan.streakTiers.length;
@@ -292,6 +343,8 @@ class _PlanCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: Spacing.md),
+            _projection(plan),
+            const SizedBox(height: Spacing.md),
             const Divider(color: AppColors.line, height: 1),
             const SizedBox(height: Spacing.md),
             IntrinsicHeight(
@@ -360,6 +413,72 @@ class _PlanCard extends StatelessWidget {
             ),
           ],
         ),
+      );
+
+  /// Modelled outcomes. Labelled as projections, because that is what they
+  /// are — no shop has run long enough to make them measurements.
+  Widget _projection(DiscountPlan plan) => Container(
+        padding: const EdgeInsets.all(Spacing.sm),
+        decoration: BoxDecoration(
+          color: AppColors.card2,
+          borderRadius: Radii.mdAll,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'PROJECTED',
+              style: AppText.body(
+                size: 10,
+                weight: FontWeight.w700,
+                color: AppColors.muted2,
+              ),
+            ),
+            const SizedBox(height: Spacing.sm),
+            _projectionRow(
+              Icons.repeat,
+              'Repeat rate',
+              '${plan.stats.projectedRepeatRate}%',
+              plan.color,
+            ),
+            const SizedBox(height: 6),
+            _projectionRow(
+              Icons.people_outline,
+              '30-day retention',
+              '${plan.stats.customerRetention30d}%',
+              plan.color,
+            ),
+            const SizedBox(height: 6),
+            _projectionRow(
+              Icons.trending_up,
+              'Revenue impact',
+              plan.stats.revenueImpact,
+              plan.color,
+            ),
+          ],
+        ),
+      );
+
+  Widget _projectionRow(
+    IconData icon,
+    String label,
+    String value,
+    Color color,
+  ) =>
+      Row(
+        children: [
+          Icon(icon, size: 14, color: AppColors.muted2),
+          const SizedBox(width: 6),
+          Expanded(child: Text(label, style: AppText.body(size: 12))),
+          Text(
+            value,
+            style: AppText.body(
+              size: 12,
+              weight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
       );
 
   Widget _fact(String value, String label) => Column(

@@ -44,15 +44,33 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Shops are publicly readable (customers browse & scan). Only the owner
+    // Shops are readable by any signed-in user (customers browse & scan), but
+    // NOT by the public: `if true` let anyone with the project id enumerate
+    // every shop and its ownerId without ever authenticating. Only the owner
     // may create or edit their own shop; ownerId is pinned to the caller.
     match /shops/{shopId} {
-      allow read: if true;
+      allow read: if isSignedIn();
       allow create: if isSignedIn()
-                    && request.resource.data.ownerId == request.auth.uid;
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.id == shopId
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 120
+                    && request.resource.data.streakWindowDays is int
+                    && request.resource.data.streakWindowDays > 0
+                    && request.resource.data.streakWindowDays <= 90;
+      // Ownership is immutable: without pinning both sides an owner could
+      // hand their shop to another account, taking its streaks with it.
       allow update: if isSignedIn()
                     && resource.data.ownerId == request.auth.uid
-                    && request.resource.data.ownerId == request.auth.uid;
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.id == resource.data.id
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.name.size() <= 120
+                    && request.resource.data.streakWindowDays is int
+                    && request.resource.data.streakWindowDays > 0
+                    && request.resource.data.streakWindowDays <= 90;
       allow delete: if false;
     }
 
@@ -90,8 +108,13 @@ service cloud.firestore {
 
     // Customer "suggest a shop from an external QR" flow. Create-only.
     match /shopSuggestions/{suggestionId} {
+      // Bounded so the collection can't be used as free unbounded storage.
       allow create: if isSignedIn()
-                    && request.resource.data.suggestedBy == request.auth.uid;
+                    && request.resource.data.suggestedBy == request.auth.uid
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() <= 200
+                    && request.resource.data.qrData is string
+                    && request.resource.data.qrData.size() <= 2000;
       allow read, update, delete: if false;
     }
 

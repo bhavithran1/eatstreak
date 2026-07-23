@@ -8,6 +8,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/dates.dart';
 import '../../data/models/streak.dart';
+import '../../domain/subscription.dart';
 import '../../state/store_controller.dart';
 import '../shared/widgets/app_screen.dart';
 import '../shared/widgets/empty_state.dart';
@@ -108,6 +109,8 @@ class DashboardScreen extends ConsumerWidget {
       ),
     ];
 
+    final subscription = subscriptionFor(shop.createdAt, today);
+
     final dailyCounts = [
       for (var i = 29; i >= 0; i--)
         visits.where((v) => v.timestamp.startsWith(dateNDaysAgo(i))).length,
@@ -206,6 +209,10 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ],
         ),
+        if (subscription.isTrialing) ...[
+          const SizedBox(height: Spacing.md),
+          _trialStatus(subscription.daysLeftInTrial),
+        ],
         if (lapsed.isNotEmpty) ...[
           const SizedBox(height: Spacing.md),
           _lapsedBanner(
@@ -349,6 +356,35 @@ class DashboardScreen extends ConsumerWidget {
               label,
               textAlign: TextAlign.center,
               style: AppText.body(size: 11),
+            ),
+          ],
+        ),
+      );
+
+  /// Where the free month stands. Status only — no price, no way to pay. See
+  /// showsPricingInApp in domain/subscription.dart for why.
+  Widget _trialStatus(int daysLeft) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.success.withValues(alpha: 0.06),
+          borderRadius: Radii.lgAll,
+          border: Border.all(color: AppColors.success.withValues(alpha: 0.19)),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.card_giftcard_outlined,
+              size: 20,
+              color: AppColors.success,
+            ),
+            const SizedBox(width: Spacing.sm),
+            Expanded(
+              child: Text(
+                daysLeft == 1
+                    ? 'Last day of your free month'
+                    : '$daysLeft days left in your free month',
+                style: AppText.body(size: 13, weight: FontWeight.w600),
+              ),
             ),
           ],
         ),
