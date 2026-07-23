@@ -10,6 +10,7 @@ import '../data/models/visit.dart';
 import '../data/models/visit_result.dart';
 import '../data/models/voucher.dart';
 import '../data/repositories/eatstreak_repository.dart';
+import '../domain/streak_logic.dart';
 import 'auth_controller.dart';
 import 'providers.dart';
 
@@ -158,8 +159,18 @@ class StoreController extends AsyncNotifier<StoreState> {
         ...result.newVouchers.where((v) => !known.contains(v.id)),
       ];
 
+      // Mirror the ember the server just awarded. Without this the balance
+      // stays a check-in behind, and a repair the customer can now afford is
+      // still offered as "not enough embers".
+      final user = current.currentUser;
+
       state = AsyncValue.data(
-        current.copyWith(streaks: streaks, visits: visits, vouchers: vouchers),
+        current.copyWith(
+          streaks: streaks,
+          visits: visits,
+          vouchers: vouchers,
+          currentUser: user?.withEmbers(user.embers + embersPerCheckIn),
+        ),
       );
     }
 
