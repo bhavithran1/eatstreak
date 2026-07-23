@@ -1,46 +1,54 @@
-// Pure logic for single-use check-in codes, factored out of the callable so it
-// can be unit-tested without an emulator (same approach as streakLogic.ts).
+// Pure logic for daily check-in codes, factored out of the callables so it can
+// be unit-tested without an emulator (same approach as streakLogic.ts).
+//
+// One code per shop per day. The code is a random secret — never derived from
+// the shop id — so it can't be guessed, and yesterday's code is dead today.
+// There is no per-scan consumption: the server already caps check-ins at one
+// per shop per day, so a code is only ever worth one visit to any one customer.
 
 import { CheckInTokenDoc } from './types';
 
-// How long a code stays valid while it sits on the owner's screen. The code is
-// replaced the moment it's scanned (single-use + regenerate-on-use), so this is
-// only a backstop: long enough that a code never expires under a waiting
-// customer, short enough to bound a photographed-but-unscanned code and to let
-// Firestore TTL clean up abandoned codes daily.
-export const CHECK_IN_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+// Cleanup backstop only; validity is decided by the code's `date`, not by this.
+// Two days of slack keeps a code around long enough to be diagnosable.
+export const CHECK_IN_TOKEN_TTL_SECONDS = 48 * 60 * 60;
 
-/** A freshly minted, unused check-in code document. */
+/** One document per shop per day. */
+export function checkInTokenDocId(shopId: string, date: string): string {
+  return `${shopId}_${date}`;
+}
+
+/** A day's code document. [date] is the shop-timezone calendar day. */
 export function newCheckInTokenDoc(
   shopId: string,
   ownerId: string,
+  date: string,
+  secret: string,
   now: Date,
 ): CheckInTokenDoc {
   return {
     shopId,
     ownerId,
+    date,
+    secret,
     createdAt: now.toISOString(),
     expiresAt: new Date(now.getTime() + CHECK_IN_TOKEN_TTL_SECONDS * 1000).toISOString(),
-    used: false,
-    usedBy: null,
-    usedAt: null,
   };
 }
 
 /**
- * Whether a scanned single-use code may be consumed for [shopId] at [nowMs].
- * Valid only if it exists, is for this shop, hasn't been used, and hasn't
- * expired. Everything else — a stale QR, a screenshot, a code for another
- * shop — is rejected.
+ * Whether [presented] is the valid check-in code for [shopId] on [today].
+ * Rejects a missing code, another shop's code, a different day's code, and any
+ * secret that doesn't match exactly.
  */
 export function isCheckInTokenValid(
-  token: CheckInTokenDoc | null,
+  doc: CheckInTokenDoc | null,
   shopId: string,
-  nowMs: number,
+  today: string,
+  presented: string,
 ): boolean {
-  if (token === null) return false;
-  if (token.shopId !== shopId) return false;
-  if (token.used === true) return false;
-  if (new Date(token.expiresAt).getTime() < nowMs) return false;
-  return true;
+  if (doc === null) return false;
+  if (doc.shopId !== shopId) return false;
+  if (doc.date !== today) return false;
+  if (!doc.secret || !presented) return false;
+  return doc.secret === presented;
 }

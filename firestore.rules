@@ -72,15 +72,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Single-use check-in codes. Minted and consumed only by Cloud Functions
-    // (Admin SDK) — clients can never write, so a code can't be forged or
-    // replayed. The owner may *read* their own codes so their screen can tell
-    // when one has been scanned and show the next; a customer can't read
-    // another shop's codes, and reading only exposes the used/expiry status of
-    // a code the owner already holds.
-    match /checkInTokens/{token} {
-      allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
-      allow write: if false;
+    // Daily check-in codes. Issued and verified only by Cloud Functions (Admin
+    // SDK). Clients never touch these directly — the owner gets today's code
+    // from the createCheckInToken callable, which checks ownership first. A
+    // readable secret here would let anyone check in without visiting.
+    match /checkInTokens/{code} {
+      allow read, write: if false;
     }
 
     // Customer "suggest a shop from an external QR" flow. Create-only.

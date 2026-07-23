@@ -52,14 +52,10 @@ abstract interface class EatStreakRepository {
   });
 
   // ---- authoritative mutations ---------------------------------------------
-  /// Mint a single-use, short-lived check-in code for a shop the caller owns.
-  /// The owner's device shows this at checkout; the server ties the resulting
-  /// check-in to it so a screenshot can't be replayed.
-  Future<CheckInToken> createCheckInToken(String shopId);
-
-  /// Emits `true` once the given code has been consumed by a check-in, so the
-  /// owner's screen can show the next code. The owner may only watch their own.
-  Stream<bool> watchCheckInTokenUsed(String token);
+  /// Today's check-in code for a shop the caller owns. Idempotent — the same
+  /// code all day — so the owner's screen can just ask for it on open. Pass
+  /// [rotate] to burn today's code and issue a new one if it leaks.
+  Future<CheckInToken> createCheckInToken(String shopId, {bool rotate});
 
   /// Record a check-in for the signed-in user; runs streak + voucher logic.
   /// [token] is the single-use code scanned from the owner's screen.

@@ -80,13 +80,14 @@ export interface VisitResult {
   shop?: Shop;
 }
 
-// A single-use, short-lived check-in code minted by the owner at checkout.
+// The check-in code for one shop on one day. `secret` is random, so the code
+// can't be derived from the shop id; `date` is the shop-timezone calendar day,
+// which is what makes yesterday's code useless today.
 export interface CheckInTokenDoc {
   shopId: string;
   ownerId: string;
+  date: string;
+  secret: string;
   createdAt: string;
   expiresAt: string;
-  used: boolean;
-  usedBy: string | null;
-  usedAt: string | null;
 }

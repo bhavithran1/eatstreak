@@ -118,13 +118,9 @@ class StoreController extends AsyncNotifier<StoreState> {
     );
   }
 
-  /// Mint a single-use check-in code for the owner's shop to show at checkout.
-  Future<CheckInToken> createCheckInToken(String shopId) =>
-      _repo.createCheckInToken(shopId);
-
-  /// Emits `true` once the owner's current code has been scanned.
-  Stream<bool> watchCheckInTokenUsed(String token) =>
-      _repo.watchCheckInTokenUsed(token);
+  /// Today's check-in code for the owner's shop. [rotate] issues a new one.
+  Future<CheckInToken> createCheckInToken(String shopId, {bool rotate = false}) =>
+      _repo.createCheckInToken(shopId, rotate: rotate);
 
   /// Record a check-in and fold the result into local state, so the success
   /// screen and home reflect it without a round trip.

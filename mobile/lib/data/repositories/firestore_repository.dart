@@ -145,19 +145,12 @@ class FirestoreRepository implements EatStreakRepository {
   // ---- server-authoritative mutations --------------------------------------
 
   @override
-  Future<CheckInToken> createCheckInToken(String shopId) async {
+  Future<CheckInToken> createCheckInToken(String shopId, {bool rotate = false}) async {
     final result = await _functions
         .httpsCallable('createCheckInToken')
-        .call<Map<String, dynamic>>({'shopId': shopId});
+        .call<Map<String, dynamic>>({'shopId': shopId, 'rotate': rotate});
     return CheckInToken.fromJson(Map<String, dynamic>.from(result.data));
   }
-
-  @override
-  Stream<bool> watchCheckInTokenUsed(String token) => _db
-      .collection('checkInTokens')
-      .doc(token)
-      .snapshots()
-      .map((snap) => snap.data()?['used'] == true);
 
   @override
   Future<VisitResult> checkIn(String shopId, {String? token}) async {

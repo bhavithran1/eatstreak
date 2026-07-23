@@ -32,38 +32,26 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
   CheckInToken? _token;
   bool _loading = false;
   Object? _error;
-  StreamSubscription<bool>? _usedSub;
   bool _started = false;
 
-  @override
-  void dispose() {
-    _usedSub?.cancel();
-    super.dispose();
-  }
-
-  /// Mint a code and watch for it to be scanned. It stays on screen unchanged
-  /// until a check-in consumes it (or the owner taps "New code"), then the next
-  /// one is minted — there is no timed rotation, so an idle screen costs
-  /// nothing beyond one lightweight listener.
-  Future<void> _generate(String shopId) async {
+  /// Fetch today's code. The server returns the same code all day, so opening
+  /// this screen repeatedly is free — nothing rotates until tomorrow, or until
+  /// [rotate] is passed to deliberately replace a code that has leaked.
+  Future<void> _load(String shopId, {bool rotate = false}) async {
     if (_loading) return;
     setState(() {
       _loading = true;
       _error = null;
     });
-    await _usedSub?.cancel();
-    _usedSub = null;
 
     try {
-      final store = ref.read(storeControllerProvider.notifier);
-      final token = await store.createCheckInToken(shopId);
+      final token = await ref
+          .read(storeControllerProvider.notifier)
+          .createCheckInToken(shopId, rotate: rotate);
       if (!mounted) return;
       setState(() {
         _token = token;
         _loading = false;
-      });
-      _usedSub = store.watchCheckInTokenUsed(token.token).listen((used) {
-        if (used && mounted) unawaited(_generate(shopId));
       });
     } catch (e) {
       if (!mounted) return;
@@ -97,12 +85,11 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
       );
     }
 
-    // Mint the first code once the shop is known. It's replaced only when
-    // scanned, so this runs a single time.
+    // Fetch today's code once the shop is known.
     if (!_started) {
       _started = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(_generate(shop.id));
+        if (mounted) unawaited(_load(shop.id));
       });
     }
 
@@ -149,16 +136,19 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
         Text(shop.name, style: AppText.heading(size: 20)),
         const SizedBox(height: 2),
         Text(
-          'Works once — a new code appears after each scan',
+          "Today's code — changes automatically each day",
           textAlign: TextAlign.center,
           style: AppText.body(size: 13),
         ),
         const SizedBox(height: Spacing.md),
         GradientButton(
-          label: 'New code',
+          label: _error == null ? 'Reset code' : 'Try again',
           icon: Icons.refresh,
+          variant: _error == null
+              ? GradientButtonVariant.outline
+              : GradientButtonVariant.gradient,
           busy: _loading,
-          onPressed: () => unawaited(_generate(shop.id)),
+          onPressed: () => unawaited(_load(shop.id, rotate: _error == null)),
         ),
       ],
     );
@@ -218,10 +208,11 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
             _tip(Icons.qr_code_scanner,
                 'They open EatStreak and scan to log the visit'),
             const SizedBox(height: Spacing.md),
-            _tip(Icons.lock_outline,
-                'Each code works once — the next appears after every scan'),
+            _tip(Icons.today_outlined,
+                "A new code is issued each day — yesterday's stops working"),
             const SizedBox(height: Spacing.md),
-            _tip(Icons.refresh, 'Tap "New code" any time you want a fresh one'),
+            _tip(Icons.refresh,
+                'Tap "Reset code" if you think today\'s code has leaked'),
           ],
         ),
       );

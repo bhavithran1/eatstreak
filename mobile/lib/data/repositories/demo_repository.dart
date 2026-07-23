@@ -192,21 +192,16 @@ class DemoRepository implements EatStreakRepository {
   // ---- mutations that are server-side in the real backend -------------------
 
   @override
-  Future<CheckInToken> createCheckInToken(String shopId) async {
-    // No server in demo mode — a locally-minted code lets the owner QR screen
-    // render, and demo check-ins don't validate it.
+  Future<CheckInToken> createCheckInToken(String shopId, {bool rotate = false}) async {
+    // No server in demo mode — a code derived from the day keeps the owner QR
+    // screen stable across opens, and demo check-ins don't validate it.
     return CheckInToken(
-      token: 'demo_${generateId()}',
+      token: 'demo_${shopId}_${toDateString(DateTime.now())}',
       shopId: shopId,
-      expiresAt: DateTime.now().add(const Duration(hours: 24)),
-      ttlSeconds: 24 * 60 * 60,
+      expiresAt: DateTime.now().add(const Duration(hours: 48)),
+      ttlSeconds: 48 * 60 * 60,
     );
   }
-
-  @override
-  Stream<bool> watchCheckInTokenUsed(String token) =>
-      // No backend to observe in demo mode; the owner refreshes with "New code".
-      const Stream<bool>.empty();
 
   @override
   Future<VisitResult> checkIn(String shopId, {String? token}) async {
