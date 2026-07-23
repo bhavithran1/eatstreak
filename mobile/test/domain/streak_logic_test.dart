@@ -1,6 +1,7 @@
 import 'package:eatstreak/core/utils/dates.dart';
 import 'package:eatstreak/data/models/enums.dart';
 import 'package:eatstreak/data/models/reward_tier.dart';
+import 'package:eatstreak/data/models/streak.dart';
 import 'package:eatstreak/domain/streak_logic.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -165,40 +166,128 @@ void main() {
     });
   });
 
-  group('repairEligibility', () {
+  group('repairInfo', () {
+    RepairInfo infoFor(Streak s, {int window = 3}) => repairInfo(
+          s.currentStreakDays,
+          s.lastVisitDate,
+          s.brokenStreakDays,
+          s.brokenOn,
+          today,
+          window,
+        );
+
+    Streak streakOf({
+      required int days,
+      required String lastVisit,
+      int broken = 0,
+      String brokenOn = '',
+      String brokenStart = '',
+    }) =>
+        Streak(
+          id: 'u_s',
+          userId: 'u',
+          shopId: 's',
+          currentStreakDays: days,
+          longestStreakDays: days,
+          totalVisits: days,
+          lastVisitDate: lastVisit,
+          streakStartDate: '2026-06-01',
+          isStreakAlive: true,
+          brokenStreakDays: broken,
+          brokenOn: brokenOn,
+          brokenStartDate: brokenStart,
+        );
+
     test('a streak inside its window is not broken', () {
-      expect(
-        repairEligibility(10, addDays(today, -2), today, 3),
-        RepairEligibility.notBroken,
-      );
+      final i = infoFor(streakOf(days: 10, lastVisit: addDays(today, -2)));
+      expect(i.eligibility, RepairEligibility.notBroken);
+      expect(i.cost, 0);
     });
 
-    test('just past the window is repairable', () {
-      expect(
-        repairEligibility(10, addDays(today, -4), today, 3),
-        RepairEligibility.repairable,
-      );
+    test('just past the window is repairable, priced on what broke', () {
+      final i = infoFor(streakOf(days: 10, lastVisit: addDays(today, -4)));
+      expect(i.eligibility, RepairEligibility.repairable);
+      expect(i.lostStreakDays, 10);
+      expect(i.cost, repairCost(10));
     });
 
     test('a 2-day streak is too short to be worth repairing', () {
       expect(
-        repairEligibility(2, addDays(today, -4), today, 3),
+        infoFor(streakOf(days: 2, lastVisit: addDays(today, -4))).eligibility,
         RepairEligibility.tooShort,
       );
     });
 
     test('past the grace period it is gone for good', () {
       expect(
-        repairEligibility(30, addDays(today, -6), today, 3),
+        infoFor(streakOf(days: 30, lastVisit: addDays(today, -6))).eligibility,
         RepairEligibility.tooLate,
       );
     });
 
     test('never having visited is not a break', () {
       expect(
-        repairEligibility(0, '', today, 3),
+        infoFor(streakOf(days: 0, lastVisit: '')).eligibility,
         RepairEligibility.notBroken,
       );
+    });
+
+    // Visiting after a break must not destroy the chance to repair.
+    test('a recorded break is still repairable after checking in again', () {
+      final i = infoFor(streakOf(
+        days: 1,
+        lastVisit: today,
+        broken: 30,
+        brokenOn: addDays(today, -4),
+        brokenStart: '2026-06-01',
+      ));
+      expect(i.eligibility, RepairEligibility.repairable);
+      expect(i.lostStreakDays, 30);
+      expect(i.cost, 15);
+    });
+
+    test('a recorded break still expires', () {
+      expect(
+        infoFor(streakOf(
+          days: 1,
+          lastVisit: today,
+          broken: 30,
+          brokenOn: addDays(today, -9),
+        )).eligibility,
+        RepairEligibility.tooLate,
+      );
+    });
+  });
+
+  group('computeCheckIn records the break', () {
+    test('a reset stores what was lost so it can be repaired later', () {
+      final existing = StreakCore(
+        currentStreakDays: 30,
+        longestStreakDays: 30,
+        totalVisits: 60,
+        lastVisitDate: addDays(today, -4),
+        streakStartDate: '2026-06-01',
+        isStreakAlive: true,
+      );
+      final r = computeCheckIn(existing, today, 3).streak;
+      expect(r.currentStreakDays, 1);
+      expect(r.brokenStreakDays, 30);
+      expect(r.brokenOn, addDays(today, -4));
+      expect(r.brokenStartDate, '2026-06-01');
+    });
+
+    test('an ordinary increment leaves the break record alone', () {
+      final existing = StreakCore(
+        currentStreakDays: 5,
+        longestStreakDays: 5,
+        totalVisits: 5,
+        lastVisitDate: addDays(today, -1),
+        streakStartDate: '2026-07-01',
+        isStreakAlive: true,
+      );
+      final r = computeCheckIn(existing, today, 3).streak;
+      expect(r.currentStreakDays, 6);
+      expect(r.brokenStreakDays, 0);
     });
   });
 }

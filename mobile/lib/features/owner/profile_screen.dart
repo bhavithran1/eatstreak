@@ -45,7 +45,11 @@ class OwnerProfileScreen extends ConsumerWidget {
           ),
           const SizedBox(height: Spacing.sm),
         ],
-        _registerShopAction(context, hasShop: shop != null),
+        // Only offered when there is no shop yet: StoreState.ownedShop returns
+        // the first match, so a second shop would be invisible everywhere in
+        // the app. Inviting the owner to create one would silently swallow the
+        // work.
+        if (shop == null) _registerShopAction(context),
         const SizedBox(height: Spacing.lg),
         Text('Account mode', style: AppText.heading(size: 16)),
         const SizedBox(height: Spacing.sm),
@@ -100,11 +104,10 @@ class OwnerProfileScreen extends ConsumerWidget {
         ),
       );
 
-  Widget _registerShopAction(BuildContext context, {required bool hasShop}) =>
-      _action(
+  Widget _registerShopAction(BuildContext context) => _action(
         context,
         icon: Icons.add_circle_outline,
-        title: hasShop ? 'Register another shop' : 'Register your shop',
+        title: 'Register your shop',
         subtitle: 'Scan a QR or enter details to add a shop',
         route: Routes.registerShop,
       );

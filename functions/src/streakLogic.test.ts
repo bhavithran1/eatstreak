@@ -3,7 +3,7 @@
 //
 // Covers the exact scenarios from the plan's verification section.
 
-import { computeCheckIn, qualifyingTiers, StreakCore, repairCost, repairEligibility, applyRepair } from './streakLogic';
+import { computeCheckIn, qualifyingTiers, StreakCore, repairCost, repairInfo, applyRepair } from './streakLogic';
 import { toDateStringInTZ, addDays } from './dates';
 import { RewardTier } from './types';
 
@@ -152,23 +152,50 @@ const tiers: RewardTier[] = [
   // window 3: visited TODAY-2 is still alive, TODAY-4 is broken.
   const alive = { currentStreakDays: 10, lastVisitDate: addDays(TODAY, -2) };
   eq('eligibility: inside window is not broken',
-    repairEligibility(alive, TODAY, 3), 'not_broken');
+    repairInfo(alive, TODAY, 3).eligibility, 'not_broken');
 
   const broken = { currentStreakDays: 10, lastVisitDate: addDays(TODAY, -4) };
   eq('eligibility: just past the window is repairable',
-    repairEligibility(broken, TODAY, 3), 'repairable');
+    repairInfo(broken, TODAY, 3).eligibility, 'repairable');
+  eq('eligibility: prices the streak that broke',
+    repairInfo(broken, TODAY, 3).cost, repairCost(10));
 
   const shortStreak = { currentStreakDays: 2, lastVisitDate: addDays(TODAY, -4) };
   eq('eligibility: a 2-day streak is too short to repair',
-    repairEligibility(shortStreak, TODAY, 3), 'too_short');
+    repairInfo(shortStreak, TODAY, 3).eligibility, 'too_short');
 
   const abandoned = { currentStreakDays: 30, lastVisitDate: addDays(TODAY, -6) };
   eq('eligibility: past the grace period it is gone for good',
-    repairEligibility(abandoned, TODAY, 3), 'too_late');
+    repairInfo(abandoned, TODAY, 3).eligibility, 'too_late');
 
   const never = { currentStreakDays: 0, lastVisitDate: '' };
   eq('eligibility: no visits yet is not a break',
-    repairEligibility(never, TODAY, 3), 'not_broken');
+    repairInfo(never, TODAY, 3).eligibility, 'not_broken');
+
+  // Visiting after a break must not destroy the chance to repair.
+  const bigStreak = {
+    currentStreakDays: 30, longestStreakDays: 30, totalVisits: 60,
+    lastVisitDate: addDays(TODAY, -4), streakStartDate: '2026-06-01', isStreakAlive: true,
+  };
+  const afterVisit = computeCheckIn(bigStreak, TODAY, 3).streak;
+  eq('break: the visit resets the streak', afterVisit.currentStreakDays, 1);
+  eq('break: but the loss is recorded', afterVisit.brokenStreakDays, 30);
+  eq('break: with the date it broke on', afterVisit.brokenOn, addDays(TODAY, -4));
+  eq('post-visit: still repairable', repairInfo(afterVisit, TODAY, 3).eligibility, 'repairable');
+  eq('post-visit: priced on what was lost', repairInfo(afterVisit, TODAY, 3).cost, 15);
+
+  const restored = applyRepair(afterVisit, TODAY);
+  eq('post-visit repair: lost run folded onto days rebuilt since', restored.currentStreakDays, 31);
+  eq('post-visit repair: original start date restored', restored.streakStartDate, '2026-06-01');
+  eq('post-visit repair: totalVisits not inflated', restored.totalVisits, 61);
+  eq('post-visit repair: record cleared', restored.brokenStreakDays, 0);
+  eq('post-visit repair: cannot be repaired twice',
+    repairInfo(restored, TODAY, 3).eligibility, 'not_broken');
+
+  const staleBreak = computeCheckIn(
+    { ...bigStreak, lastVisitDate: addDays(TODAY, -9) }, TODAY, 3).streak;
+  eq('post-visit: an old break is still too late',
+    repairInfo(staleBreak, TODAY, 3).eligibility, 'too_late');
 
   // A repair restores the streak without counting as a visit.
   const core = {

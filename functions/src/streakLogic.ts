@@ -17,6 +17,13 @@ export interface StreakCore {
   lastVisitDate: string;
   streakStartDate: string;
   isStreakAlive: boolean;
+  // What the last break cost, recorded when the streak resets. Without this a
+  // customer who breaks a streak and then simply visits again has overwritten
+  // the only evidence of what they lost — so turning up at the shop would
+  // destroy their chance to repair, which is exactly backwards.
+  brokenStreakDays?: number;
+  brokenOn?: string;
+  brokenStartDate?: string;
 }
 
 export type CheckInStatus = 'success' | 'already_visited_today';
@@ -60,6 +67,12 @@ export function computeCheckIn(
   const totalVisits = existing.totalVisits + 1;
   let currentStreakDays: number;
   let streakStartDate: string;
+  // Carried forward untouched unless this check-in is the one that breaks it.
+  let broken = {
+    brokenStreakDays: existing.brokenStreakDays ?? 0,
+    brokenOn: existing.brokenOn ?? '',
+    brokenStartDate: existing.brokenStartDate ?? '',
+  };
 
   if (!existing.lastVisitDate) {
     currentStreakDays = 1;
@@ -72,6 +85,11 @@ export function computeCheckIn(
     } else {
       currentStreakDays = 1;
       streakStartDate = todayStr;
+      broken = {
+        brokenStreakDays: existing.currentStreakDays,
+        brokenOn: existing.lastVisitDate,
+        brokenStartDate: existing.streakStartDate,
+      };
     }
   }
 
@@ -84,6 +102,7 @@ export function computeCheckIn(
       lastVisitDate: todayStr,
       longestStreakDays: Math.max(existing.longestStreakDays, currentStreakDays),
       isStreakAlive: true,
+      ...broken,
     },
   };
 }
@@ -145,33 +164,86 @@ export function repairCost(streakDays: number): number {
 
 export type RepairEligibility = 'repairable' | 'not_broken' | 'too_short' | 'too_late';
 
-/**
- * Whether a streak may be repaired today. A streak is only "broken" relative to
- * the shop's window, and the offer expires so a repair can't resurrect a streak
- * abandoned weeks ago.
- */
-export function repairEligibility(
-  streak: Pick<StreakCore, 'currentStreakDays' | 'lastVisitDate'>,
-  todayStr: string,
-  streakWindowDays: number,
-): RepairEligibility {
-  if (!streak.lastVisitDate) return 'not_broken';
-
-  const daysSince = daysBetween(streak.lastVisitDate, todayStr);
-  if (daysSince <= streakWindowDays) return 'not_broken';
-  if (streak.currentStreakDays < MIN_REPAIRABLE_STREAK) return 'too_short';
-  if (daysSince > streakWindowDays + REPAIR_GRACE_DAYS) return 'too_late';
-  return 'repairable';
+export interface RepairInfo {
+  eligibility: RepairEligibility;
+  /** The streak length that broke, and that a repair would restore. */
+  lostStreakDays: number;
+  /** Embers required. 0 when not repairable. */
+  cost: number;
 }
 
 /**
- * The streak after a repair: alive again, as though the last visit had been
- * yesterday. The length is preserved but never incremented — a repair is not a
- * visit, and it must still leave room to check in today.
+ * Whether a streak may be repaired today, what was lost, and what it costs.
+ *
+ * There are two ways to arrive here. Either the customer has not been back
+ * since the break, so the old length is still sitting on the streak, or they
+ * have already checked in again — which resets the streak but records what it
+ * cost. Both must be repairable, or visiting the shop would be what destroys
+ * the customer's chance to save their streak.
  */
+export function repairInfo(
+  streak: Pick<
+    StreakCore,
+    'currentStreakDays' | 'lastVisitDate' | 'brokenStreakDays' | 'brokenOn'
+  >,
+  todayStr: string,
+  streakWindowDays: number,
+): RepairInfo {
+  const none = (eligibility: RepairEligibility): RepairInfo => ({
+    eligibility,
+    lostStreakDays: 0,
+    cost: 0,
+  });
+
+  const brokenDays = streak.brokenStreakDays ?? 0;
+  const brokenOn = streak.brokenOn ?? '';
+
+  // Already checked in since the break: the loss is on record.
+  if (brokenDays > 0 && brokenOn) {
+    if (brokenDays < MIN_REPAIRABLE_STREAK) return none('too_short');
+    if (daysBetween(brokenOn, todayStr) > streakWindowDays + REPAIR_GRACE_DAYS) {
+      return none('too_late');
+    }
+    return { eligibility: 'repairable', lostStreakDays: brokenDays, cost: repairCost(brokenDays) };
+  }
+
+  // Not back yet: the streak still carries its pre-break length.
+  if (!streak.lastVisitDate) return none('not_broken');
+  const daysSince = daysBetween(streak.lastVisitDate, todayStr);
+  if (daysSince <= streakWindowDays) return none('not_broken');
+  if (streak.currentStreakDays < MIN_REPAIRABLE_STREAK) return none('too_short');
+  if (daysSince > streakWindowDays + REPAIR_GRACE_DAYS) return none('too_late');
+
+  return {
+    eligibility: 'repairable',
+    lostStreakDays: streak.currentStreakDays,
+    cost: repairCost(streak.currentStreakDays),
+  };
+}
+
 export function applyRepair(streak: StreakCore, todayStr: string): StreakCore {
+  const brokenDays = streak.brokenStreakDays ?? 0;
+  const cleared = { brokenStreakDays: 0, brokenOn: '', brokenStartDate: '' };
+
+  // Already checked in since the break: fold the lost run back onto the days
+  // rebuilt since, and keep the real last-visit date.
+  if (brokenDays > 0 && streak.brokenOn) {
+    const restored = brokenDays + streak.currentStreakDays;
+    return {
+      ...streak,
+      ...cleared,
+      currentStreakDays: restored,
+      longestStreakDays: Math.max(streak.longestStreakDays, restored),
+      streakStartDate: streak.brokenStartDate || streak.streakStartDate,
+      isStreakAlive: true,
+    };
+  }
+
+  // Not back yet: keep the length and read as though yesterday's visit
+  // happened, so the streak is alive and today's check-in still counts.
   return {
     ...streak,
+    ...cleared,
     lastVisitDate: addDays(todayStr, -1),
     isStreakAlive: true,
   };

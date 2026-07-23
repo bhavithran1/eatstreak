@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/errors.dart';
+import '../../core/utils/dates.dart';
 import '../../data/models/shop.dart';
 import '../../data/models/streak.dart';
 import '../../domain/streak_logic.dart';
@@ -39,9 +40,18 @@ class RepairStreakCard extends ConsumerStatefulWidget {
 class _RepairStreakCardState extends ConsumerState<RepairStreakCard> {
   bool _busy = false;
 
+  RepairInfo get _info => repairInfo(
+        widget.streak.currentStreakDays,
+        widget.streak.lastVisitDate,
+        widget.streak.brokenStreakDays,
+        widget.streak.brokenOn,
+        todayString(),
+        widget.shop.streakWindowDays,
+      );
+
   Future<void> _repair() async {
     if (_busy) return;
-    final cost = repairCost(widget.streak.currentStreakDays);
+    final cost = _info.cost;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -50,10 +60,9 @@ class _RepairStreakCardState extends ConsumerState<RepairStreakCard> {
         shape: RoundedRectangleBorder(borderRadius: Radii.lgAll),
         title: Text('Repair your streak?', style: AppText.heading(size: 18)),
         content: Text(
-          'This spends $cost of your ${widget.embers} embers and restores your '
-          '${widget.streak.currentStreakDays}-day streak at '
-          '${widget.shop.name}. It does not count as a visit — check in today '
-          'to keep it growing.',
+          'This spends $cost of your ${widget.embers} embers and restores '
+          'your ${_info.lostStreakDays}-day streak at ${widget.shop.name}. It '
+          'does not count as a visit — check in today to keep it growing.',
           style: AppText.body(size: 14, height: 1.45),
         ),
         actions: [
@@ -107,7 +116,8 @@ class _RepairStreakCardState extends ConsumerState<RepairStreakCard> {
 
   @override
   Widget build(BuildContext context) {
-    final cost = repairCost(widget.streak.currentStreakDays);
+    final info = _info;
+    final cost = info.cost;
     final affordable = widget.embers >= cost;
 
     return SurfaceCard(
@@ -136,7 +146,7 @@ class _RepairStreakCardState extends ConsumerState<RepairStreakCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${widget.streak.currentStreakDays}-day streak broke',
+                      '${info.lostStreakDays}-day streak broke',
                       style: AppText.heading(size: 15),
                     ),
                     Text(

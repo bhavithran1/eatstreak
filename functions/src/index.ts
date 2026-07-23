@@ -11,8 +11,7 @@ import {
   generateVoucherCode,
   StreakCore,
   EMBERS_PER_CHECK_IN,
-  repairCost,
-  repairEligibility,
+  repairInfo,
   applyRepair,
 } from './streakLogic';
 import {
@@ -30,6 +29,9 @@ setGlobalOptions({ region: 'asia-southeast1', maxInstances: 10 });
 
 const streakId = (uid: string, shopId: string) => `${uid}_${shopId}`;
 const voucherId = (uid: string, tierId: string) => `${uid}_${tierId}`;
+
+/// Minimum gap between deliberate code rotations for one shop.
+const ROTATE_COOLDOWN_SECONDS = 30;
 
 /**
  * Today's check-in code for a shop the caller owns. Idempotent: every call on
@@ -60,9 +62,27 @@ export const createCheckInToken = onCall(
     const ref = db.collection('checkInTokens').doc(checkInTokenDocId(shopId, today));
 
     const existing = await ref.get();
-    if (existing.exists && request.data?.rotate !== true) {
+    const rotating = request.data?.rotate === true;
+
+    if (existing.exists && !rotating) {
       const doc = existing.data() as CheckInTokenDoc;
       return { token: doc.secret, shopId, expiresAt: doc.expiresAt, ttlSeconds: CHECK_IN_TOKEN_TTL_SECONDS };
+    }
+
+    // Rotation invalidates every code already handed out today, so it is a
+    // deliberate act, not something to fire on a repeated tap. Rate-limited
+    // both to keep it that way and because it is an unauthenticated-cost write
+    // path an owner could otherwise hammer.
+    if (existing.exists && rotating) {
+      const since = Date.now() - new Date((existing.data() as CheckInTokenDoc).createdAt).getTime();
+      if (since < ROTATE_COOLDOWN_SECONDS * 1000) {
+        throw new HttpsError(
+          'resource-exhausted',
+          `You just issued a new code. Wait ${Math.ceil(
+            (ROTATE_COOLDOWN_SECONDS * 1000 - since) / 1000,
+          )}s before rotating again.`,
+        );
+      }
     }
 
     const doc = newCheckInTokenDoc(shopId, uid, today, randomBytes(18).toString('base64url'), new Date());
@@ -254,21 +274,21 @@ export const repairStreak = onCall(
       }
       const streak = sSnap.data() as Streak;
 
-      // Eligibility is decided here, never by the client: the same rule the app
-      // uses to offer the repair has to gate the write.
-      const eligibility = repairEligibility(streak, todayStr, shop.streakWindowDays);
-      if (eligibility !== 'repairable') {
+      // Eligibility and price are decided here, never by the client: the same
+      // rule the app uses to offer the repair has to gate the write.
+      const info = repairInfo(streak, todayStr, shop.streakWindowDays);
+      if (info.eligibility !== 'repairable') {
         throw new HttpsError(
           'failed-precondition',
-          eligibility === 'not_broken'
+          info.eligibility === 'not_broken'
             ? 'That streak is still alive — nothing to repair.'
-            : eligibility === 'too_short'
+            : info.eligibility === 'too_short'
               ? 'That streak is too short to repair. Just visit again to start a new one.'
               : 'That streak has been broken too long to repair.',
         );
       }
 
-      const cost = repairCost(streak.currentStreakDays);
+      const cost = info.cost;
       const embers = (uSnap.data()?.embers as number) ?? 0;
       if (embers < cost) {
         throw new HttpsError(

@@ -332,29 +332,50 @@ class DemoRepository implements EatStreakRepository {
     }
 
     final todayStr = toDateString(DateTime.now());
-    final eligibility = repairEligibility(
+    final info = repairInfo(
       streak.currentStreakDays,
       streak.lastVisitDate,
+      streak.brokenStreakDays,
+      streak.brokenOn,
       todayStr,
       shop.streakWindowDays,
     );
-    if (eligibility != RepairEligibility.repairable) {
+    if (!info.isRepairable) {
       throw StateError('That streak cannot be repaired.');
     }
 
-    final cost = repairCost(streak.currentStreakDays);
+    final cost = info.cost;
     final user = data.users.where((u) => u.id == demoUid).firstOrNull;
     final embers = user?.embers ?? 0;
     if (embers < cost) {
       throw StateError('This repair costs $cost embers and you have $embers.');
     }
 
-    // Mirrors applyRepair() on the server: alive again, as though the last
-    // visit had been yesterday, and never counted as a visit.
-    final repaired = streak.copyWith(
-      lastVisitDate: addDays(todayStr, -1),
-      isStreakAlive: true,
-    );
+    // Mirrors applyRepair() on the server. Two cases: already back since the
+    // break (fold the lost run onto what has been rebuilt), or not back yet
+    // (read as though yesterday's visit happened, so today still counts).
+    final repaired = streak.brokenStreakDays > 0 && streak.brokenOn.isNotEmpty
+        ? streak.copyWith(
+            currentStreakDays: streak.brokenStreakDays + streak.currentStreakDays,
+            longestStreakDays: streak.longestStreakDays >
+                    streak.brokenStreakDays + streak.currentStreakDays
+                ? streak.longestStreakDays
+                : streak.brokenStreakDays + streak.currentStreakDays,
+            streakStartDate: streak.brokenStartDate.isEmpty
+                ? streak.streakStartDate
+                : streak.brokenStartDate,
+            isStreakAlive: true,
+            brokenStreakDays: 0,
+            brokenOn: '',
+            brokenStartDate: '',
+          )
+        : streak.copyWith(
+            lastVisitDate: addDays(todayStr, -1),
+            isStreakAlive: true,
+            brokenStreakDays: 0,
+            brokenOn: '',
+            brokenStartDate: '',
+          );
 
     await _mutate((d) {
       final i = d.streaks.indexWhere((s) => s.id == repaired.id);

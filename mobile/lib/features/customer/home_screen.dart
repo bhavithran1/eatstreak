@@ -99,13 +99,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final today = todayString();
     final repairable = [
       for (final s in active)
-        if (repairEligibility(
-              s.streak.currentStreakDays,
-              s.streak.lastVisitDate,
-              today,
-              s.shop.streakWindowDays,
-            ) ==
-            RepairEligibility.repairable)
+        if (repairInfo(
+          s.streak.currentStreakDays,
+          s.streak.lastVisitDate,
+          s.streak.brokenStreakDays,
+          s.streak.brokenOn,
+          today,
+          s.shop.streakWindowDays,
+        ).isRepairable)
           s,
     ];
     final embers = state.currentUser?.embers ?? 0;

@@ -11,6 +11,9 @@ class Streak {
     required this.lastVisitDate,
     required this.streakStartDate,
     required this.isStreakAlive,
+    this.brokenStreakDays = 0,
+    this.brokenOn = '',
+    this.brokenStartDate = '',
     this.shopOwnerId,
     this.userName,
   });
@@ -27,6 +30,13 @@ class Streak {
   final String streakStartDate;
   final bool isStreakAlive;
 
+  /// What the last break cost, recorded when the streak reset. Lets a customer
+  /// repair a streak even after they have already visited again — otherwise
+  /// turning up at the shop would destroy the evidence of what they lost.
+  final int brokenStreakDays;
+  final String brokenOn;
+  final String brokenStartDate;
+
   /// Denormalized by the backend so owners can query without cross-user reads.
   final String? shopOwnerId;
   final String? userName;
@@ -40,6 +50,9 @@ class Streak {
     bool? isStreakAlive,
     String? shopOwnerId,
     String? userName,
+    int? brokenStreakDays,
+    String? brokenOn,
+    String? brokenStartDate,
   }) =>
       Streak(
         id: id,
@@ -51,6 +64,9 @@ class Streak {
         lastVisitDate: lastVisitDate ?? this.lastVisitDate,
         streakStartDate: streakStartDate ?? this.streakStartDate,
         isStreakAlive: isStreakAlive ?? this.isStreakAlive,
+        brokenStreakDays: brokenStreakDays ?? this.brokenStreakDays,
+        brokenOn: brokenOn ?? this.brokenOn,
+        brokenStartDate: brokenStartDate ?? this.brokenStartDate,
         shopOwnerId: shopOwnerId ?? this.shopOwnerId,
         userName: userName ?? this.userName,
       );
@@ -65,6 +81,9 @@ class Streak {
         lastVisitDate: json['lastVisitDate'] as String? ?? '',
         streakStartDate: json['streakStartDate'] as String? ?? '',
         isStreakAlive: json['isStreakAlive'] as bool? ?? false,
+        brokenStreakDays: (json['brokenStreakDays'] as num?)?.toInt() ?? 0,
+        brokenOn: json['brokenOn'] as String? ?? '',
+        brokenStartDate: json['brokenStartDate'] as String? ?? '',
         shopOwnerId: json['shopOwnerId'] as String?,
         userName: json['userName'] as String?,
       );
@@ -79,6 +98,9 @@ class Streak {
         'lastVisitDate': lastVisitDate,
         'streakStartDate': streakStartDate,
         'isStreakAlive': isStreakAlive,
+        'brokenStreakDays': brokenStreakDays,
+        'brokenOn': brokenOn,
+        'brokenStartDate': brokenStartDate,
         if (shopOwnerId != null) 'shopOwnerId': shopOwnerId,
         if (userName != null) 'userName': userName,
       };

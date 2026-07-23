@@ -17,6 +17,9 @@ class StreakCore {
     required this.lastVisitDate,
     required this.streakStartDate,
     required this.isStreakAlive,
+    this.brokenStreakDays = 0,
+    this.brokenOn = '',
+    this.brokenStartDate = '',
   });
 
   final int currentStreakDays;
@@ -25,6 +28,12 @@ class StreakCore {
   final String lastVisitDate;
   final String streakStartDate;
   final bool isStreakAlive;
+
+  /// What the last break cost, recorded when the streak resets — so visiting
+  /// again doesn't destroy the customer's chance to repair.
+  final int brokenStreakDays;
+  final String brokenOn;
+  final String brokenStartDate;
 }
 
 class ComputeCheckInResult {
@@ -69,6 +78,10 @@ ComputeCheckInResult computeCheckIn(
 
   final int currentStreakDays;
   final String streakStartDate;
+  // Carried forward untouched unless this check-in is the one that breaks it.
+  var brokenStreakDays = existing.brokenStreakDays;
+  var brokenOn = existing.brokenOn;
+  var brokenStartDate = existing.brokenStartDate;
 
   if (existing.lastVisitDate.isEmpty) {
     currentStreakDays = 1;
@@ -81,6 +94,9 @@ ComputeCheckInResult computeCheckIn(
     } else {
       currentStreakDays = 1;
       streakStartDate = todayStr;
+      brokenStreakDays = existing.currentStreakDays;
+      brokenOn = existing.lastVisitDate;
+      brokenStartDate = existing.streakStartDate;
     }
   }
 
@@ -94,6 +110,9 @@ ComputeCheckInResult computeCheckIn(
       lastVisitDate: todayStr,
       streakStartDate: streakStartDate,
       isStreakAlive: true,
+      brokenStreakDays: brokenStreakDays,
+      brokenOn: brokenOn,
+      brokenStartDate: brokenStartDate,
     ),
   );
 }
@@ -142,22 +161,71 @@ int repairCost(int streakDays) {
 
 enum RepairEligibility { repairable, notBroken, tooShort, tooLate }
 
-/// Whether a streak may be repaired today. A streak is only "broken" relative
-/// to the shop's window, and the offer expires so a repair can't resurrect a
-/// streak abandoned weeks ago.
-RepairEligibility repairEligibility(
+class RepairInfo {
+  const RepairInfo({
+    required this.eligibility,
+    required this.lostStreakDays,
+    required this.cost,
+  });
+
+  final RepairEligibility eligibility;
+
+  /// The streak length that broke, and that a repair would restore.
+  final int lostStreakDays;
+
+  /// Embers required. 0 when not repairable.
+  final int cost;
+
+  bool get isRepairable => eligibility == RepairEligibility.repairable;
+}
+
+/// Whether a streak may be repaired today, what was lost, and what it costs.
+///
+/// Two ways to arrive here: the customer has not been back since the break, so
+/// the old length is still on the streak; or they have already checked in
+/// again, which resets it but records the loss. Both must be repairable, or
+/// visiting the shop would be what destroys the chance to save the streak.
+RepairInfo repairInfo(
   int currentStreakDays,
   String lastVisitDate,
+  int brokenStreakDays,
+  String brokenOn,
   String todayStr,
   int streakWindowDays,
 ) {
-  if (lastVisitDate.isEmpty) return RepairEligibility.notBroken;
+  RepairInfo none(RepairEligibility e) =>
+      RepairInfo(eligibility: e, lostStreakDays: 0, cost: 0);
 
-  final daysSince = daysBetween(lastVisitDate, todayStr);
-  if (daysSince <= streakWindowDays) return RepairEligibility.notBroken;
-  if (currentStreakDays < minRepairableStreak) return RepairEligibility.tooShort;
-  if (daysSince > streakWindowDays + repairGraceDays) {
-    return RepairEligibility.tooLate;
+  // Already checked in since the break: the loss is on record.
+  if (brokenStreakDays > 0 && brokenOn.isNotEmpty) {
+    if (brokenStreakDays < minRepairableStreak) {
+      return none(RepairEligibility.tooShort);
+    }
+    if (daysBetween(brokenOn, todayStr) > streakWindowDays + repairGraceDays) {
+      return none(RepairEligibility.tooLate);
+    }
+    return RepairInfo(
+      eligibility: RepairEligibility.repairable,
+      lostStreakDays: brokenStreakDays,
+      cost: repairCost(brokenStreakDays),
+    );
   }
-  return RepairEligibility.repairable;
+
+  // Not back yet: the streak still carries its pre-break length.
+  if (lastVisitDate.isEmpty) return none(RepairEligibility.notBroken);
+  final daysSince = daysBetween(lastVisitDate, todayStr);
+  if (daysSince <= streakWindowDays) return none(RepairEligibility.notBroken);
+  if (currentStreakDays < minRepairableStreak) {
+    return none(RepairEligibility.tooShort);
+  }
+  if (daysSince > streakWindowDays + repairGraceDays) {
+    return none(RepairEligibility.tooLate);
+  }
+
+  return RepairInfo(
+    eligibility: RepairEligibility.repairable,
+    lostStreakDays: currentStreakDays,
+    cost: repairCost(currentStreakDays),
+  );
 }
+

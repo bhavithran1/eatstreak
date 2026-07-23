@@ -139,7 +139,7 @@ class DashboardScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: Spacing.sm),
-            _liveBadge(),
+            _windowBadge(shop.streakWindowDays),
           ],
         ),
         const SizedBox(height: Spacing.lg),
@@ -292,7 +292,11 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _liveBadge() => Container(
+  /// The shop's return window. This slot used to render a hardcoded "Live"
+  /// pill that was true regardless of connection or data age — decoration
+  /// pretending to be status. The window is the number that actually governs
+  /// whether a customer's streak survives.
+  Widget _windowBadge(int windowDays) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: AppColors.success.withValues(alpha: 0.08),
@@ -312,7 +316,7 @@ class DashboardScreen extends ConsumerWidget {
             ),
             const SizedBox(width: 6),
             Text(
-              'Live',
+              '$windowDays-day window',
               style: AppText.body(
                 size: 13,
                 weight: FontWeight.w600,
