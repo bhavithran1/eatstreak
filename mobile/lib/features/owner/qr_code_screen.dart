@@ -19,9 +19,10 @@ import '../shared/widgets/empty_state.dart';
 import '../shared/widgets/gradient_button.dart';
 import '../shared/widgets/store_scope.dart';
 
-/// The shop's check-in code — a single-use code the owner shows the customer at
-/// checkout. Each code works once and refreshes on its own, so a screenshot
-/// can't be reused and a saved code can't be scanned from home.
+/// The shop's check-in code — one code per day, shown to the customer at
+/// checkout. It stays the same all day and turns over on the shop's own
+/// timezone boundary, so yesterday's screenshot is worthless. "Reset code"
+/// issues a new one immediately if today's leaks.
 class OwnerQrCodeScreen extends ConsumerStatefulWidget {
   const OwnerQrCodeScreen({super.key});
 
@@ -137,7 +138,13 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
           ),
         ),
         const SizedBox(height: Spacing.md),
-        Text(shop.name, style: AppText.heading(size: 20)),
+        Text(
+          shop.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: AppText.heading(size: 20),
+        ),
         const SizedBox(height: 2),
         Text(
           "Today's code — changes automatically each day",

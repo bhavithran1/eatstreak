@@ -19,13 +19,13 @@ Set<String> get _checkInHosts => {
       if (Env.firebaseProjectId.isNotEmpty) '${Env.firebaseProjectId}.firebaseapp.com',
     };
 
-/// A resolved EatStreak check-in code: the shop it points at, plus the optional
-/// single-use [token] the owner's device minted for this scan.
+/// A resolved EatStreak check-in code: the shop it points at, plus the day's
+/// [token] from the owner's screen.
 typedef CheckInTarget = ({String shopId, String? token});
 
-/// The canonical link baked into a shop's QR code. When a single-use [token] is
-/// supplied it rides along as `?t=`, so the same link doubles as the rotating
-/// code the owner shows at checkout.
+/// The canonical link baked into a shop's QR code. The day's [token] rides
+/// along as `?t=`, so the same link doubles as the code the owner shows at
+/// checkout.
 String buildCheckInLink(String shopId, {String? token}) {
   final base = 'https://${Env.linkDomain}/c/${Uri.encodeComponent(shopId)}';
   return token == null || token.isEmpty
@@ -36,9 +36,9 @@ String buildCheckInLink(String shopId, {String? token}) {
 String encodeQr(String shopId, {String? token}) =>
     buildCheckInLink(shopId, token: token);
 
-/// Pull the shop (and any single-use token) out of an EatStreak check-in
-/// payload. Returns null for anything that isn't one — the caller then treats
-/// it as an external QR.
+/// Pull the shop (and the day's token) out of an EatStreak check-in payload.
+/// Returns null for anything that isn't one — the caller then treats it as an
+/// external QR.
 CheckInTarget? parseCheckInTarget(String data) {
   final trimmed = data.trim();
 

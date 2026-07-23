@@ -61,7 +61,7 @@ abstract interface class EatStreakRepository {
   Future<CheckInToken> createCheckInToken(String shopId, {bool rotate});
 
   /// Record a check-in for the signed-in user; runs streak + voucher logic.
-  /// [token] is the single-use code scanned from the owner's screen.
+  /// [token] is the day's code scanned from the owner's screen.
   Future<VisitResult> checkIn(String shopId, {String? token});
 
   /// Spend embers to bring a broken streak back. The server decides whether it

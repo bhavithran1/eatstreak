@@ -193,6 +193,8 @@ class _VerifyVoucherScreenState extends ConsumerState<VerifyVoucherScreen> {
                   const SizedBox(height: 2),
                   Text(
                     '${v.tierLabel} · ${v.code}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: AppText.body(size: 13),
                   ),
                 ],

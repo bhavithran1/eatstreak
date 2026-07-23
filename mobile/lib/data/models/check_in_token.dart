@@ -1,8 +1,7 @@
-/// A short-lived, single-use check-in code the owner's device mints at payment
-/// time. The customer scans it once; the server marks it used, so a screenshot
-/// can't be replayed and a saved code can't be used from home. Minted and
-/// validated by the `createCheckInToken` / `checkIn` callables — see
-/// functions/src/index.ts.
+/// A shop's check-in code for one day. The owner shows it at checkout; the
+/// server checks the scanned code against the one issued for that shop today,
+/// so yesterday's code is dead. Issued and validated by the
+/// `createCheckInToken` / `checkIn` callables — see functions/src/index.ts.
 class CheckInToken {
   const CheckInToken({
     required this.token,
