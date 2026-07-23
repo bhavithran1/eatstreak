@@ -29,9 +29,27 @@ The build (step 5) is the part that proves the change compiles for a real device
 works whether or not the phone is there. **Treat the install as a separate, optional
 step** — it is the one part of this loop that depends on hardware you don't control.
 
-`xcrun devicectl list devices` reporting `unavailable`, or error 1011, means the phone is
-locked, asleep, or off the same network. That is not a failure of the change. Retry once
-in case it just woke; if it still fails, **stop retrying and hand it over**:
+`unavailable` in `xcrun devicectl list devices`, or error 1011, means **unreachable** — it
+says nothing about why. Do not guess, and do not tell the user to wake the phone before
+you have looked. Read the device record:
+
+```bash
+xcrun devicectl list devices --json-output /tmp/dev.json && python3 -c "
+import json
+for x in json.load(open('/tmp/dev.json'))['result']['devices']:
+    c, d = x.get('connectionProperties', {}), x.get('deviceProperties', {})
+    print(c.get('transportType'), c.get('tunnelState'), c.get('pairingState'),
+          d.get('developerModeStatus'))"
+```
+
+- `transportType: None` → no cable and no network tunnel. The phone is not connected to
+  this Mac at all. Unlocking it changes nothing; it needs a USB-C cable. This is the
+  usual cause.
+- `pairingState` not `paired` → trust was revoked (an iOS update does this). Re-trust in
+  Xcode → Window → Devices and Simulators.
+- `developerModeStatus` not `enabled` → Settings → Privacy & Security → Developer Mode.
+
+Report which of these it actually was. Then **stop retrying and hand it over**:
 
 ```bash
 cd mobile && xcrun devicectl device install app --device 00008140-00167C9E2422201C build/ios/iphoneos/Runner.app

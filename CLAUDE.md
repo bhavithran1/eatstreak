@@ -27,9 +27,11 @@ npm test          # streakLogic + checkInToken + billing suites
   cd mobile && flutter build ios --release --dart-define-from-file=env.json
   xcrun devicectl device install app --device 00008140-00167C9E2422201C build/ios/iphoneos/Runner.app
   ```
-  Free provisioning: the build stops launching after 7 days, and Apple sign-in never
-  works on it. Google sign-in does. If `devicectl` reports the device `unavailable`, the
-  phone is asleep or locked — ask the user to wake it, then retry the same command.
+  Free provisioning: the build stops launching after 7 days from *install*, and Apple
+  sign-in never works on it. Google sign-in does. `devicectl` reporting the device
+  `unavailable` means unreachable, not asleep — check `transportType` in
+  `devicectl list devices --json-output` before advising anything (`/ship` has the
+  command). It is almost always `None`, meaning no cable is plugged in.
 - **Never run `firebase deploy`.** The user runs it — tell them the exact command. Same
   for `firebase functions:secrets:set` and anything else that wants a credential.
 - **Firestore's location is permanent.** It is `asia-southeast1`. Never create or
