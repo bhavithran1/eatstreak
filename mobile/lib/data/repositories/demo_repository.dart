@@ -390,7 +390,9 @@ class DemoRepository implements EatStreakRepository {
   @override
   Future<Voucher> redeemVoucherByCode(String code) async {
     final data = await _load();
-    final normalized = code.trim().toUpperCase();
+    // Same forgiving normalisation the Cloud Function applies, so a code typed
+    // the same way behaves the same way in demo mode and against the backend.
+    final normalized = normalizeVoucherCode(code);
     final voucher = data.vouchers
         .where((v) => v.code.toUpperCase() == normalized && !v.isRedeemed)
         .firstOrNull;

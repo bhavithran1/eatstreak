@@ -25,6 +25,7 @@ import '../../features/owner/register_shop_screen.dart';
 import '../../features/owner/verify_voucher_screen.dart';
 import '../../features/owner/rewards_screen.dart';
 import '../../state/auth_controller.dart';
+import '../../state/providers.dart';
 import '../theme/app_colors.dart';
 import '../utils/pending_check_in.dart';
 import 'routes.dart';
@@ -39,10 +40,15 @@ final routerProvider = Provider<GoRouter>((ref) {
   ref.listen(authControllerProvider, (_, next) => auth.value = next);
   ref.onDispose(auth.dispose);
 
+  // Screen views come from the router rather than from each screen, so a new
+  // screen is measured the moment it has a route.
+  final observer = ref.read(analyticsProvider).navigatorObserver;
+
   return GoRouter(
     navigatorKey: _rootKey,
     initialLocation: Routes.splash,
     refreshListenable: auth,
+    observers: [if (observer is NavigatorObserver) observer],
     routes: [
       GoRoute(path: Routes.splash, builder: (_, _) => const _SplashScreen()),
       GoRoute(path: Routes.signIn, builder: (_, _) => const SignInScreen()),

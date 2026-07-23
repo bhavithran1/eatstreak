@@ -56,18 +56,29 @@ class AuthController extends Notifier<AuthState> {
 
   Future<void> _onUidChanged(String? uid) async {
     if (uid == null) {
+      unawaited(ref.read(analyticsProvider).setUser(null));
       state = const AuthState(initializing: false);
       return;
     }
     // Null until onboarding writes the profile — that's what routes a brand new
     // account to /onboarding rather than straight into the app.
     final doc = await _repo.getUser(uid);
+    // Identifying here rather than at the sign-in button covers every way an
+    // account arrives, including a session restored at launch — which is most
+    // of them, and the reason the console showed no users.
+    unawaited(ref.read(analyticsProvider).setUser(uid, role: doc?.role));
     state = AuthState(uid: uid, userDoc: doc, initializing: false);
   }
 
-  Future<void> signInWithGoogle() => _auth.signInWithGoogle();
+  Future<void> signInWithGoogle() async {
+    await _auth.signInWithGoogle();
+    unawaited(ref.read(analyticsProvider).signedIn('google'));
+  }
 
-  Future<void> signInWithApple() => _auth.signInWithApple();
+  Future<void> signInWithApple() async {
+    await _auth.signInWithApple();
+    unawaited(ref.read(analyticsProvider).signedIn('apple'));
+  }
 
   Future<bool> isAppleSignInAvailable() => _auth.isAppleSignInAvailable();
 
@@ -101,6 +112,9 @@ class AuthController extends Notifier<AuthState> {
     }
 
     await repo.updateUser(user);
+    final analytics = ref.read(analyticsProvider);
+    unawaited(analytics.setUser(uid, role: role));
+    unawaited(analytics.onboarded(role));
     state = state.copyWith(userDoc: user);
     return user;
   }

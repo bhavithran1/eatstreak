@@ -19,6 +19,9 @@ class CheckInToken {
         token: json['token'] as String,
         shopId: json['shopId'] as String,
         expiresAt: DateTime.parse(json['expiresAt'] as String),
-        ttlSeconds: (json['ttlSeconds'] as num?)?.toInt() ?? 90,
+        // Matches CHECK_IN_TOKEN_TTL_SECONDS in functions/src/checkInToken.ts.
+        // Only a cleanup backstop: what makes a code valid is its date, so this
+        // fallback never decides whether a scan works.
+        ttlSeconds: (json['ttlSeconds'] as num?)?.toInt() ?? 48 * 60 * 60,
       );
 }

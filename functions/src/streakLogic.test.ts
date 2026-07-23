@@ -3,7 +3,10 @@
 //
 // Covers the exact scenarios from the plan's verification section.
 
-import { computeCheckIn, qualifyingTiers, StreakCore, repairCost, repairInfo, applyRepair } from './streakLogic';
+import {
+  computeCheckIn, qualifyingTiers, StreakCore, repairCost, repairInfo, applyRepair,
+  generateVoucherCode, normalizeVoucherCode, VOUCHER_CODE_LENGTH, VOUCHER_CODE_PREFIX,
+} from './streakLogic';
 import { toDateStringInTZ, addDays } from './dates';
 import { RewardTier } from './types';
 
@@ -210,6 +213,56 @@ const tiers: RewardTier[] = [
   // ...which means checking in today still increments rather than being a no-op.
   eq('repair: a check-in today still counts',
     computeCheckIn(repaired, TODAY, 3).streak.currentStreakDays, 13);
+}
+
+// --- voucher codes ----------------------------------------------------------
+// The Dart generator drifted to 4 characters while this one made 6, and nothing
+// noticed because neither side was tested. The length is asserted explicitly so
+// a future change has to change the constant, and the Dart suite asserts the
+// same number against its own copy.
+{
+  console.log('\nvoucher codes');
+
+  const code = generateVoucherCode(() => 0);
+  eq('code carries the EAT- prefix', code.startsWith(VOUCHER_CODE_PREFIX), true);
+  eq('body is VOUCHER_CODE_LENGTH characters',
+    code.length - VOUCHER_CODE_PREFIX.length, VOUCHER_CODE_LENGTH);
+  eq('length constant is 6 (must match formatters.dart)', VOUCHER_CODE_LENGTH, 6);
+
+  // Ambiguity-free alphabet: staff read these off a stranger's phone screen.
+  // L is deliberately kept — it is only confusable with 1, which is excluded.
+  let sawAmbiguous = false;
+  for (let i = 0; i < 200; i++) {
+    if (/[IO01]/.test(generateVoucherCode().slice(VOUCHER_CODE_PREFIX.length))) {
+      sawAmbiguous = true;
+    }
+  }
+  eq('never generates I, O, 0 or 1', sawAmbiguous, false);
+
+  // How the code actually arrives when a human types it.
+  eq('normalize: already correct', normalizeVoucherCode('EAT-AB3KP9'), 'EAT-AB3KP9');
+  eq('normalize: lowercase', normalizeVoucherCode('eat-ab3kp9'), 'EAT-AB3KP9');
+  eq('normalize: prefix left off', normalizeVoucherCode('AB3KP9'), 'EAT-AB3KP9');
+  eq('normalize: lowercase and no prefix', normalizeVoucherCode('ab3kp9'), 'EAT-AB3KP9');
+  eq('normalize: spaces inside', normalizeVoucherCode('EAT- AB3 KP9'), 'EAT-AB3KP9');
+  eq('normalize: surrounding whitespace', normalizeVoucherCode('  EAT-AB3KP9 \n'), 'EAT-AB3KP9');
+  eq('normalize: an extra hyphen', normalizeVoucherCode('EAT-AB3-KP9'), 'EAT-AB3KP9');
+  eq('normalize: empty is empty, not a bare prefix', normalizeVoucherCode(''), '');
+  eq('normalize: prefix alone is empty', normalizeVoucherCode('EAT-'), '');
+  eq('normalize: punctuation only is empty', normalizeVoucherCode('---'), '');
+
+  // A body may itself start with E-A-T, so the prefix is only stripped when
+  // what remains is exactly a body's worth of characters.
+  eq('normalize: body beginning EAT, prefix present',
+    normalizeVoucherCode('EAT-EATK79'), 'EAT-EATK79');
+  eq('normalize: body beginning EAT, prefix omitted',
+    normalizeVoucherCode('EATK79'), 'EAT-EATK79');
+
+  // Forgiving about formatting, exact about the code.
+  eq('normalize: a wrong body stays wrong',
+    normalizeVoucherCode('AB3KP8') === 'EAT-AB3KP9', false);
+  eq('normalize: round-trips its own output',
+    normalizeVoucherCode(normalizeVoucherCode('ab3 kp9')), 'EAT-AB3KP9');
 }
 
 // --- summary ----------------------------------------------------------------

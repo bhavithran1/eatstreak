@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/analytics/analytics.dart';
 import '../core/utils/dates.dart';
 import '../data/models/check_in_token.dart';
 import '../data/models/enums.dart';
@@ -127,9 +130,16 @@ class StoreController extends AsyncNotifier<StoreState> {
     );
   }
 
+  Analytics get _analytics => ref.read(analyticsProvider);
+
   /// Today's check-in code for the owner's shop. [rotate] issues a new one.
-  Future<CheckInToken> createCheckInToken(String shopId, {bool rotate = false}) =>
-      _repo.createCheckInToken(shopId, rotate: rotate);
+  Future<CheckInToken> createCheckInToken(String shopId, {bool rotate = false}) async {
+    final token = await _repo.createCheckInToken(shopId, rotate: rotate);
+    // Only the deliberate reset is worth counting — the idempotent daily fetch
+    // fires every time the screen opens and would drown it.
+    if (rotate) unawaited(_analytics.checkInCodeRotated());
+    return token;
+  }
 
   /// Record a check-in and fold the result into local state, so the success
   /// screen and home reflect it without a round trip.
@@ -172,6 +182,16 @@ class StoreController extends AsyncNotifier<StoreState> {
           currentUser: user?.withEmbers(user.embers + embersPerCheckIn),
         ),
       );
+
+      unawaited(_analytics.checkedIn(
+        streakDays: streak.currentStreakDays,
+        newVouchers: result.newVouchers.length,
+      ));
+    } else {
+      // Logged here rather than in the scanner so the deep-link path is counted
+      // too — a scan that opens the app from the camera never touches the
+      // in-app scanner at all.
+      unawaited(_analytics.checkInFailed(result.status.name));
     }
 
     return result;
@@ -191,14 +211,39 @@ class StoreController extends AsyncNotifier<StoreState> {
             : [...current.vouchers, updated],
       ),
     );
+    unawaited(_analytics.voucherRedeemed(discountPercent: updated.discountPercent));
     return updated;
   }
 
   /// Spend embers to bring a broken streak back. The balance lives on the user
   /// document, so refresh it afterwards to reflect what was spent.
   Future<Streak> repairStreak(String shopId) async {
+    // Read what the repair cost *before* it happens: the server spends the
+    // embers and returns only the mended streak, and by the time it does the
+    // break record has been cleared.
+    final before = state.value?.streaks.where((s) => s.shopId == shopId).firstOrNull;
+    final window = state.value?.shops
+        .where((s) => s.id == shopId)
+        .firstOrNull
+        ?.streakWindowDays;
+
     final repaired = await _repo.repairStreak(shopId);
     final current = state.value ?? const StoreState();
+
+    if (before != null && window != null) {
+      final info = repairInfo(
+        before.currentStreakDays,
+        before.lastVisitDate,
+        before.brokenStreakDays,
+        before.brokenOn,
+        todayString(),
+        window,
+      );
+      unawaited(_analytics.streakRepaired(
+        lostDays: info.lostStreakDays,
+        cost: info.cost,
+      ));
+    }
 
     state = AsyncValue.data(
       current.copyWith(
@@ -224,6 +269,7 @@ class StoreController extends AsyncNotifier<StoreState> {
 
   Future<void> registerShop(Shop shop) async {
     await _repo.addShop(shop);
+    unawaited(_analytics.shopRegistered());
     final current = state.value ?? const StoreState();
 
     final exists = current.shops.any((s) => s.id == shop.id);

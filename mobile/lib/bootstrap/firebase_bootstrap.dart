@@ -2,6 +2,8 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/analytics/analytics.dart';
+import '../core/analytics/firebase_analytics_service.dart';
 import '../core/config/env.dart';
 import '../data/auth/auth_service.dart';
 import '../data/auth/firebase_auth_service.dart';
@@ -10,10 +12,15 @@ import '../data/repositories/firestore_repository.dart';
 
 /// The live backend, ready to override the demo providers with.
 class FirebaseServices {
-  const FirebaseServices({required this.auth, required this.repository});
+  const FirebaseServices({
+    required this.auth,
+    required this.repository,
+    required this.analytics,
+  });
 
   final AuthService auth;
   final EatStreakRepository repository;
+  final Analytics analytics;
 }
 
 /// Firebase startup, isolated here so main.dart is the only other file that
@@ -34,6 +41,7 @@ Future<FirebaseServices> initializeFirebase() async {
   return FirebaseServices(
     auth: await FirebaseAuthService.create(),
     repository: FirestoreRepository(),
+    analytics: FirebaseAnalyticsService.instance(),
   );
 }
 

@@ -19,6 +19,7 @@ Future<void> main() async {
         if (services != null) ...[
           authServiceProvider.overrideWithValue(services.auth),
           repositoryProvider.overrideWithValue(services.repository),
+          analyticsProvider.overrideWithValue(services.analytics),
         ],
       ],
       child: const EatStreakApp(),

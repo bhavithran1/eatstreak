@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../core/config/env.dart';
 import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -21,6 +22,14 @@ import '../shared/widgets/gradient_button.dart';
 import '../shared/widgets/scan_overlay.dart';
 import 'scan_success_screen.dart';
 import 'shop_not_found_screen.dart';
+
+/// "Simulate a scan" builds a check-in link carrying no day code, because the
+/// customer isn't the owner and so cannot mint one. Only demo mode accepts
+/// that: against the live backend a codeless check-in is rejected by design, so
+/// the button could never do anything but fail. Gate it on demo mode rather
+/// than on debug alone, so a debug build pointed at the real backend doesn't
+/// offer an affordance that cannot work.
+const _canSimulateScan = kDebugMode && Env.demoMode;
 
 /// The camera check-in. Also the app's only write path for customers, so every
 /// failure mode here has to say something useful rather than just stalling.
@@ -279,7 +288,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
               'Scanning happens automatically.',
               style: AppText.body(size: 13),
             ),
-            if (kDebugMode) ...[
+            if (_canSimulateScan) ...[
               const SizedBox(height: Spacing.md),
               _SimulateScanButton(onPick: (shopId) async {
                 if (_handling) return;
@@ -373,7 +382,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
                     icon: Icons.photo_camera_outlined,
                     onPressed: () => unawaited(openAppSettings()),
                   ),
-                  if (kDebugMode) ...[
+                  if (_canSimulateScan) ...[
                     const SizedBox(height: Spacing.xxl),
                     Text(
                       'No camera here — the Simulator has none. '

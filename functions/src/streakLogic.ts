@@ -127,14 +127,56 @@ export function qualifyingTiers(
   return result;
 }
 
-/** EAT-XXXX code, ambiguity-free alphabet. Ported from formatters.ts. */
+/**
+ * Number of random characters after the prefix. Must match
+ * `voucherCodeLength` in mobile/lib/core/utils/formatters.dart, which generates
+ * the demo-mode equivalent.
+ */
+export const VOUCHER_CODE_LENGTH = 6;
+
+export const VOUCHER_CODE_PREFIX = 'EAT-';
+
+/**
+ * EAT-XXXXXX code. The alphabet drops I, O, 0 and 1 — the pairs staff actually
+ * confuse when reading a code off a stranger's phone. L stays: it is only
+ * mistakable for 1, and 1 is already gone.
+ */
 export function generateVoucherCode(rand: () => number = Math.random): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < VOUCHER_CODE_LENGTH; i++) {
     code += chars[Math.floor(rand() * chars.length)];
   }
-  return `EAT-${code}`;
+  return `${VOUCHER_CODE_PREFIX}${code}`;
+}
+
+/**
+ * Tidy up a hand-typed voucher code before looking it up.
+ *
+ * Staff read the code off the customer's phone, so it arrives lowercase, with
+ * spaces, with an extra hyphen, or with the `EAT-` prefix left off. Comparing
+ * those to the stored code verbatim answers "no voucher with that code", which
+ * accuses the customer of something that is really a typo. Normalising both
+ * sides makes the lookup forgiving without widening what actually matches: the
+ * random body still has to be exactly right.
+ */
+export function normalizeVoucherCode(raw: string): string {
+  // Strip separators first, so leading whitespace can't hide the prefix and
+  // leave it to be treated as part of the code.
+  const compact = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+  // Drop the prefix only when what's left is exactly a code body. A body may
+  // itself begin with E-A-T, so removing a leading "EAT" unconditionally would
+  // eat three real characters from someone who typed the body alone.
+  const stripped = 'EAT';
+  if (compact === stripped) return ''; // the prefix and nothing else
+
+  const body =
+    compact.startsWith(stripped) && compact.length === stripped.length + VOUCHER_CODE_LENGTH
+      ? compact.slice(stripped.length)
+      : compact;
+
+  return body.length === 0 ? '' : `${VOUCHER_CODE_PREFIX}${body}`;
 }
 
 // ---- embers & streak repair ------------------------------------------------

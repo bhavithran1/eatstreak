@@ -10,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/errors.dart';
+import '../../core/utils/formatters.dart';
 import '../../data/models/voucher.dart';
 import '../../state/store_controller.dart';
 import '../shared/widgets/app_screen.dart';
@@ -42,7 +43,10 @@ class _VerifyVoucherScreenState extends ConsumerState<VerifyVoucherScreen> {
   }
 
   Future<void> _verify() async {
-    final code = _controller.text.trim();
+    // Tidied here as well as on the server: staff type these at a counter with
+    // a queue behind them, so "EAT" left off or a stray space should not come
+    // back as "no voucher with that code".
+    final code = normalizeVoucherCode(_controller.text);
     if (code.isEmpty || _busy) return;
 
     setState(() => _busy = true);

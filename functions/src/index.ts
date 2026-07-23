@@ -10,6 +10,7 @@ import {
   computeCheckIn,
   qualifyingTiers,
   generateVoucherCode,
+  normalizeVoucherCode,
   StreakCore,
   EMBERS_PER_CHECK_IN,
   repairInfo,
@@ -182,7 +183,11 @@ export const checkIn = onCall(async (request: CallableRequest<{ shopId?: string;
     // Which tiers qualify at this new streak, and which of those we haven't
     // minted yet. Idempotency is enforced by the deterministic voucher doc id
     // {uid}_{tierId}: read the candidate docs first (all reads precede writes).
-    const candidateTiers = qualifyingTiers(nextCore, shop.rewardTiers, new Set());
+    // `?? []` because the security rules don't require rewardTiers on a shop.
+    // A doc missing it would otherwise throw inside the transaction and fail
+    // the whole check-in with an opaque INTERNAL, in front of a paying
+    // customer — a shop with no rewards should just award no vouchers.
+    const candidateTiers = qualifyingTiers(nextCore, shop.rewardTiers ?? [], new Set());
     const voucherRefs = candidateTiers.map((t) => db.collection('vouchers').doc(voucherId(uid, t.id)));
     const voucherSnaps = voucherRefs.length ? await tx.getAll(...voucherRefs) : [];
     const tiersToMint = candidateTiers.filter((_, i) => !voucherSnaps[i].exists);
@@ -327,7 +332,12 @@ export const redeemVoucherByCode = onCall(
     if (!raw || typeof raw !== 'string') {
       throw new HttpsError('invalid-argument', 'A voucher code is required.');
     }
-    const code = raw.trim().toUpperCase();
+    // Forgiving on formatting, exact on the code itself — see
+    // normalizeVoucherCode.
+    const code = normalizeVoucherCode(raw);
+    if (!code) {
+      throw new HttpsError('invalid-argument', 'A voucher code is required.');
+    }
 
     // Scoped to the caller's own shops, so an owner can never redeem against
     // someone else's voucher even with a valid-looking code.
