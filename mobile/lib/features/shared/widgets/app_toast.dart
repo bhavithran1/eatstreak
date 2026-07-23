@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
@@ -37,6 +40,15 @@ abstract final class AppToast {
   }) {
     final overlay = Overlay.maybeOf(context, rootOverlay: true);
     if (overlay == null) return;
+
+    // Feedback you can feel. A check-in happens at a counter, often mid
+    // -conversation with a cashier and rarely with the screen in full view, so
+    // the toast alone is easy to miss.
+    unawaited(switch (type) {
+      ToastType.success || ToastType.warning => HapticFeedback.mediumImpact(),
+      ToastType.error => HapticFeedback.heavyImpact(),
+      ToastType.info => HapticFeedback.selectionClick(),
+    });
 
     dismiss();
 

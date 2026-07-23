@@ -17,6 +17,7 @@ import '../../state/store_controller.dart';
 import '../shared/widgets/app_screen.dart';
 import '../shared/widgets/empty_state.dart';
 import '../shared/widgets/gradient_button.dart';
+import '../shared/widgets/store_scope.dart';
 
 /// The shop's check-in code — a single-use code the owner shows the customer at
 /// checkout. Each code works once and refreshes on its own, so a screenshot
@@ -63,10 +64,13 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(storeControllerProvider).value ?? const StoreState();
+  Widget build(BuildContext context) =>
+      StoreScope(builder: (context, state) => _body(context, state));
+
+  Widget _body(BuildContext context, StoreState state) {
     final shop = state.ownedShop;
 
+    // Reached only once the store has loaded, so this really is "no shop".
     if (shop == null) {
       return Scaffold(
         backgroundColor: AppColors.bg,

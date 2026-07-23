@@ -11,6 +11,7 @@ import '../../state/store_controller.dart';
 import '../shared/widgets/app_screen.dart';
 import '../shared/widgets/app_toast.dart';
 import '../shared/widgets/empty_state.dart';
+import '../shared/widgets/store_scope.dart';
 import '../shared/widgets/voucher_card.dart';
 
 enum _Tab { active, used, expired }
@@ -72,8 +73,10 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(storeControllerProvider).value ?? const StoreState();
+  Widget build(BuildContext context) =>
+      StoreScope(builder: (context, state) => _body(context, state));
+
+  Widget _body(BuildContext context, StoreState state) {
 
     final groups = {
       _Tab.active: state.vouchers

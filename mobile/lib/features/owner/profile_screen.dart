@@ -12,13 +12,16 @@ import '../../state/store_controller.dart';
 import '../shared/widgets/app_screen.dart';
 import '../shared/widgets/profile_widgets.dart';
 import '../shared/widgets/role_switcher.dart';
+import '../shared/widgets/store_scope.dart';
 
 class OwnerProfileScreen extends ConsumerWidget {
   const OwnerProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(storeControllerProvider).value ?? const StoreState();
+  Widget build(BuildContext context, WidgetRef ref) =>
+      StoreScope(builder: (context, state) => _body(context, ref, state));
+
+  Widget _body(BuildContext context, WidgetRef ref, StoreState state) {
     final user = state.currentUser;
     final shop = state.ownedShop;
     final isDemo = ref.watch(isDemoModeProvider);

@@ -14,6 +14,7 @@ import '../shared/widgets/empty_state.dart';
 import '../shared/widgets/gradient_button.dart';
 import '../shared/widgets/reward_ladder.dart';
 import '../shared/widgets/shop_icon.dart';
+import '../shared/widgets/store_scope.dart';
 
 /// One shop: its details, the user's standing there, and both reward ladders.
 class ShopDetailScreen extends ConsumerWidget {
@@ -22,8 +23,10 @@ class ShopDetailScreen extends ConsumerWidget {
   final String shopId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(storeControllerProvider).value ?? const StoreState();
+  Widget build(BuildContext context, WidgetRef ref) =>
+      StoreScope(builder: (context, state) => _body(context, ref, state));
+
+  Widget _body(BuildContext context, WidgetRef ref, StoreState state) {
     final shop = state.shopById(shopId);
 
     if (shop == null) {

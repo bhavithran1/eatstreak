@@ -11,6 +11,7 @@ import '../../data/models/streak.dart';
 import '../../state/store_controller.dart';
 import '../shared/widgets/app_screen.dart';
 import '../shared/widgets/empty_state.dart';
+import '../shared/widgets/store_scope.dart';
 import 'widgets/visits_sparkline.dart';
 
 /// The owner's home: today's numbers, the 30-day trend, and who's slipping away.
@@ -18,10 +19,13 @@ class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(storeControllerProvider).value ?? const StoreState();
+  Widget build(BuildContext context, WidgetRef ref) =>
+      StoreScope(builder: (context, state) => _body(context, ref, state));
+
+  Widget _body(BuildContext context, WidgetRef ref, StoreState state) {
     final shop = state.ownedShop;
 
+    // Reached only once the store has loaded, so this really is "no shop".
     if (shop == null) {
       return Scaffold(
         backgroundColor: AppColors.bg,
@@ -260,7 +264,10 @@ class DashboardScreen extends ConsumerWidget {
       );
 
   Widget _quickAction(IconData icon, String label, VoidCallback onTap) =>
-      GestureDetector(
+      Semantics(
+        button: true,
+        label: label,
+        child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
@@ -286,9 +293,14 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
         ),
+        ),
       );
 
-  Widget _lapsedBanner(int count, VoidCallback onTap) => GestureDetector(
+  Widget _lapsedBanner(int count, VoidCallback onTap) => Semantics(
+        button: true,
+        label: '$count ${count == 1 ? 'customer has' : 'customers have'} '
+            'lapsed. Review the segment.',
+        child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
@@ -336,6 +348,7 @@ class DashboardScreen extends ConsumerWidget {
               ),
             ],
           ),
+        ),
         ),
       );
 

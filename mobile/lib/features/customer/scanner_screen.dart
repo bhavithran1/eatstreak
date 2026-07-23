@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -134,7 +135,10 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
 
       case CheckInRecorded():
         // A beat of confirmation before the screen changes, so the scan reads
-        // as having landed rather than the UI just jumping.
+        // as having landed rather than the UI just jumping. The thump matters
+        // as much as the flash — the phone is often already moving away from
+        // the code by the time this fires.
+        unawaited(HapticFeedback.heavyImpact());
         setState(() => _showSuccess = true);
         await Future<void>.delayed(const Duration(milliseconds: 520));
         if (!mounted) return;

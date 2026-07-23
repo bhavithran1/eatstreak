@@ -17,6 +17,7 @@ import '../shared/widgets/app_screen.dart';
 import '../shared/widgets/brand_mark.dart';
 import '../shared/widgets/empty_state.dart';
 import '../shared/widgets/shop_card.dart';
+import '../shared/widgets/store_scope.dart';
 import '../shared/widgets/streak_card.dart';
 
 /// Streaks about to lapse come first — the whole point of the screen is to
@@ -48,29 +49,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final store = ref.watch(storeControllerProvider);
-
-    return store.when(
-      loading: () => const Scaffold(
-        backgroundColor: AppColors.bg,
-        body: Center(child: CircularProgressIndicator()),
-      ),
-      error: (e, _) => Scaffold(
-        backgroundColor: AppColors.bg,
-        body: Center(
-          child: EmptyState(
-            icon: Icons.cloud_off_outlined,
-            title: 'Could not load your streaks',
-            subtitle: 'Check your connection and try again.',
-            actionLabel: 'Retry',
-            onAction: () => ref.read(storeControllerProvider.notifier).refresh(),
-          ),
-        ),
-      ),
-      data: _buildBody,
-    );
-  }
+  Widget build(BuildContext context) =>
+      StoreScope(builder: (context, state) => _buildBody(state));
 
   Widget _buildBody(StoreState state) {
     final active = <_ActiveStreak>[];
@@ -318,41 +298,45 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 86),
-        padding: const EdgeInsets.all(Spacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: Radii.lgAll,
-          border: hairline,
-        ),
-        child: Stack(
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: AppText.heading(size: 28, weight: FontWeight.w700),
-                ),
-                Text(label, style: AppText.body(size: 12)),
-              ],
-            ),
-            if (onTap != null)
-              const Positioned(
-                right: 0,
-                top: 0,
-                child: Icon(
-                  Icons.arrow_forward,
-                  size: 15,
-                  color: AppColors.primary,
-                ),
+    return Semantics(
+      button: onTap != null,
+      label: onTap == null ? '$value $label' : '$value $label, open',
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 86),
+          padding: const EdgeInsets.all(Spacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: Radii.lgAll,
+            border: hairline,
+          ),
+          child: Stack(
+            children: [
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    style: AppText.heading(size: 28, weight: FontWeight.w700),
+                  ),
+                  Text(label, style: AppText.body(size: 12)),
+                ],
               ),
-          ],
+              if (onTap != null)
+                const Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Icon(
+                    Icons.arrow_forward,
+                    size: 15,
+                    color: AppColors.primary,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -367,7 +351,11 @@ class _UrgentBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: '$count ${count == 1 ? 'streak needs' : 'streaks need'} a visit. '
+          'Open the scanner.',
+      child: GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
@@ -411,6 +399,7 @@ class _UrgentBanner extends StatelessWidget {
             const Icon(Icons.chevron_right, size: 20, color: AppColors.muted2),
           ],
         ),
+      ),
       ),
     );
   }

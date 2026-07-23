@@ -9,6 +9,7 @@ import '../../core/utils/formatters.dart';
 import '../../state/store_controller.dart';
 import '../shared/widgets/app_screen.dart';
 import '../shared/widgets/empty_state.dart';
+import '../shared/widgets/store_scope.dart';
 
 /// How a customer is doing against the shop's return window.
 enum CustomerStatus {
@@ -58,8 +59,10 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(storeControllerProvider).value ?? const StoreState();
+  Widget build(BuildContext context) =>
+      StoreScope(builder: (context, state) => _body(context, state));
+
+  Widget _body(BuildContext context, StoreState state) {
     final shop = state.ownedShop;
     final today = todayString();
 

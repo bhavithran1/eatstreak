@@ -16,6 +16,7 @@ import '../shared/widgets/app_screen.dart';
 import '../shared/widgets/app_toast.dart';
 import '../shared/widgets/empty_state.dart';
 import '../shared/widgets/gradient_button.dart';
+import '../shared/widgets/store_scope.dart';
 
 /// Bounds that keep a ladder sane: no 0-day windows, no 100%-off tiers.
 const _minWindowDays = 1;
@@ -49,8 +50,10 @@ class _RewardsScreenState extends ConsumerState<RewardsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(storeControllerProvider).value ?? const StoreState();
+  Widget build(BuildContext context) =>
+      StoreScope(builder: (context, state) => _body(context, state));
+
+  Widget _body(BuildContext context, StoreState state) {
     final shop = state.ownedShop;
 
     if (shop == null) {
