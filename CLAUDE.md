@@ -60,6 +60,11 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
 - **A broken streak is repaired with embers, not money.** Cost scales with the streak
   that broke (`repairCost`), inside `REPAIR_GRACE_DAYS`, minimum `MIN_REPAIRABLE_STREAK`.
   The server decides eligibility and price; the client only offers the button.
+- **Analytics goes through `Analytics`, never `FirebaseAnalytics.instance`.** The
+  interface in `core/analytics/analytics.dart` imports no `firebase_*` package on purpose,
+  because `state/providers.dart` depends on it and a demo build must not link the SDK —
+  the Firebase implementation sits in its own file, imported only by the bootstrap. Add
+  a named method per event rather than a generic `log()`.
 - **Pricing must not appear in the app.** `subscription.dart` has
   `const showsPricingInApp = false` — Apple 3.1.1 requires IAP for digital subscriptions
   sold in-app. Owners subscribe on `public/billing/`. Do not "helpfully" add prices,
