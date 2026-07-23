@@ -1,5 +1,6 @@
-import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { onCall, onRequest, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { setGlobalOptions } from 'firebase-functions/v2';
+import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { randomBytes } from 'crypto';
 
@@ -14,6 +15,7 @@ import {
   repairInfo,
   applyRepair,
 } from './streakLogic';
+import { verifyWebhookSignature, statusForEvent, shopIdFromPayload } from './billing';
 import {
   CHECK_IN_TOKEN_TTL_SECONDS,
   checkInTokenDocId,
@@ -366,5 +368,85 @@ export const redeemVoucherByCode = onCall(
       tx.update(ref, { isRedeemed: true, redeemedAt });
       return { ...voucher, isRedeemed: true, redeemedAt };
     });
+  },
+);
+
+
+// ---- billing ---------------------------------------------------------------
+
+/// Set with: firebase functions:secrets:set CURLEC_WEBHOOK_SECRET
+const curlecWebhookSecret = defineSecret('CURLEC_WEBHOOK_SECRET');
+
+/**
+ * Curlec (Razorpay) subscription webhook.
+ *
+ * The only writer of `subscriptions/{shopId}`. Access must never be decided by
+ * anything the client can set: the app's trial countdown is derived from a
+ * client-written `createdAt` and is fine for display, but whether a shop has
+ * actually paid is settled here, from a signed payload.
+ *
+ * Deliberately always answers 200 once the signature checks out. A non-2xx
+ * makes Razorpay retry, and retrying will not fix an event we have chosen to
+ * ignore — it just produces a queue that never drains.
+ */
+export const curlecWebhook = onRequest(
+  { secrets: [curlecWebhookSecret], cors: false },
+  async (req, res) => {
+    if (req.method !== 'POST') {
+      res.status(405).send('Method not allowed');
+      return;
+    }
+
+    // rawBody, not body: Express has already parsed the JSON, and
+    // re-serialising it changes the bytes the signature was computed over.
+    const raw = (req as unknown as { rawBody?: Buffer }).rawBody;
+    if (!raw) {
+      console.error('curlecWebhook: no rawBody; cannot verify signature');
+      res.status(400).send('Bad request');
+      return;
+    }
+
+    const signature = req.get('X-Razorpay-Signature') ?? undefined;
+    if (!verifyWebhookSignature(raw, signature, curlecWebhookSecret.value())) {
+      // Unsigned or wrongly signed: this is the whole security boundary.
+      console.warn('curlecWebhook: signature rejected');
+      res.status(401).send('Invalid signature');
+      return;
+    }
+
+    let event: string;
+    let payload: unknown;
+    try {
+      const parsed = JSON.parse(raw.toString('utf8'));
+      event = parsed.event;
+      payload = parsed.payload;
+    } catch {
+      res.status(400).send('Malformed payload');
+      return;
+    }
+
+    const status = statusForEvent(event);
+    const shopId = shopIdFromPayload(payload);
+
+    // Unknown events leave existing state alone rather than downgrading a
+    // paying customer because Razorpay shipped a new event type.
+    if (status === 'unknown' || !shopId) {
+      console.info(`curlecWebhook: ignoring ${event} (shopId=${shopId ?? 'none'})`);
+      res.status(200).send('Ignored');
+      return;
+    }
+
+    await db.collection('subscriptions').doc(shopId).set(
+      {
+        shopId,
+        status,
+        lastEvent: event,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+
+    console.info(`curlecWebhook: ${shopId} -> ${status} (${event})`);
+    res.status(200).send('OK');
   },
 );

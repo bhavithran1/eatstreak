@@ -106,6 +106,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Whether a shop has actually paid. Written only by the Curlec webhook
+    // (Admin SDK), never by a client — this is the difference between the
+    // trial countdown, which is derived from a client-written date and is only
+    // ever cosmetic, and entitlement, which decides access.
+    match /subscriptions/{shopId} {
+      allow read: if isSignedIn()
+                  && exists(/databases/$(database)/documents/shops/$(shopId))
+                  && get(/databases/$(database)/documents/shops/$(shopId)).data.ownerId
+                     == request.auth.uid;
+      allow write: if false;
+    }
+
     // Customer "suggest a shop from an external QR" flow. Create-only.
     match /shopSuggestions/{suggestionId} {
       // Bounded so the collection can't be used as free unbounded storage.

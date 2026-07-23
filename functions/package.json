@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
-    "test": "tsc -p tsconfig.test.json && node lib-test/streakLogic.test.js && node lib-test/checkInToken.test.js",
+    "test": "tsc -p tsconfig.test.json && node lib-test/streakLogic.test.js && node lib-test/checkInToken.test.js && node lib-test/billing.test.js",
     "serve": "npm run build && firebase emulators:start --only functions,firestore,auth",
     "deploy": "firebase deploy --only functions"
   },

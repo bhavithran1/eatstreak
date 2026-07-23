@@ -31,6 +31,8 @@ dependencies:
   # Backend. Only touched when demo mode is off — see core/config/env.dart.
   firebase_core: ^4.12.1
   firebase_auth: ^6.5.6
+  # Attests that requests come from this app, not a script holding the config.
+  firebase_app_check: ^0.4.5+2
   cloud_firestore: ^6.7.1
   cloud_functions: ^6.3.5
   google_sign_in: ^7.2.0

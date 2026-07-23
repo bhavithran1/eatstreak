@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Subscribe — EatStreak</title>
+<meta name="description" content="Keep your EatStreak loyalty programme running after your free month." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0807; --card: #14100d; --ink: #fbf6f0;
+    --muted: #b6aca2; --line: rgba(251, 246, 240, 0.1); --ok: #4ade80;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100svh; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(80% 60% at 50% 0%, #17110c 0%, var(--bg) 70%);
+    color: var(--ink); font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    padding: 24px;
+  }
+  .card {
+    max-width: 460px; width: 100%; background: var(--card);
+    border: 1px solid var(--line); border-radius: 20px; padding: 36px 28px 30px;
+  }
+  h1 { font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 25px; margin-bottom: 8px; }
+  .lede { color: var(--muted); font-size: 15px; line-height: 1.55; margin-bottom: 26px; }
+  .price { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .price b { font-family: 'Space Grotesk', sans-serif; font-size: 40px; font-weight: 700; }
+  .price span { color: var(--muted); font-size: 15px; }
+  .annual { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  ul { list-style: none; margin-bottom: 26px; }
+  li { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; line-height: 1.5; margin-bottom: 11px; }
+  li svg { flex: none; margin-top: 3px; }
+  .btn {
+    display: block; width: 100%; border: 0; cursor: pointer; text-align: center;
+    background: linear-gradient(135deg, #ffd166, #ff7a18 55%, #ff3d6e);
+    color: #1a0d05; font-weight: 600; font-size: 16px; font-family: inherit;
+    text-decoration: none; border-radius: 12px; padding: 15px 20px;
+  }
+  .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+  .shop { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .shop code { color: var(--ink); }
+  .fineprint { margin-top: 20px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .fineprint a { color: var(--muted); }
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>Keep your programme running</h1>
+  <p class="lede">Your free month covers everything. Set up payment now and nothing
+    changes until it ends — you are not charged today.</p>
+
+  <p class="shop" id="shop-line" hidden>Shop: <code id="shop-id"></code></p>
+
+  <div class="price"><b>RM49</b><span>per month</span></div>
+  <p class="annual">Or RM490 a year — two months free.</p>
+
+  <ul>
+    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg><span>Unlimited customers and check-ins</span></li>
+    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg><span>Daily check-in codes and voucher verification</span></li>
+    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg><span>Streak, retention and reward-cost reporting</span></li>
+    <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg><span>Cancel any time — your data stays yours</span></li>
+  </ul>
+
+  <!-- REPLACE_WITH_CURLEC_SUBSCRIPTION_LINK — create a subscription link or plan in
+       the Curlec dashboard and paste its URL here. It MUST carry the shop id through
+       to the webhook as notes[shopId]; without that the payment cannot be attributed
+       to a shop and access will never activate. -->
+  <a class="btn" id="checkout" href="#" data-link="REPLACE_WITH_CURLEC_SUBSCRIPTION_LINK">Set up payment</a>
+
+  <p class="fineprint">Billing is handled on the web, not in the app. Questions?
+    <a href="mailto:hello@eatstreak.app">hello@eatstreak.app</a><br />
+    <a href="/">eatstreak home</a></p>
+</main>
+<script>
+  // The shop id arrives as ?shop=… from the owner's app. It has to ride through
+  // checkout into the subscription's notes, because the webhook attributes
+  // payment by notes.shopId and ignores anything it cannot attribute.
+  var shopId = new URLSearchParams(location.search).get('shop');
+  var btn = document.getElementById('checkout');
+  var link = btn.getAttribute('data-link');
+
+  if (shopId) {
+    document.getElementById('shop-id').textContent = shopId;
+    document.getElementById('shop-line').hidden = false;
+  }
+
+  if (!link || link.indexOf('REPLACE_WITH') === 0) {
+    btn.textContent = 'Payment setup coming soon';
+    btn.setAttribute('disabled', 'disabled');
+    btn.removeAttribute('href');
+  } else if (shopId) {
+    var sep = link.indexOf('?') === -1 ? '?' : '&';
+    btn.href = link + sep + 'notes[shopId]=' + encodeURIComponent(shopId);
+  } else {
+    btn.href = link;
+  }
+</script>
+</body>
+</html>
