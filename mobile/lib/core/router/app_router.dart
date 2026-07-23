@@ -220,7 +220,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       // and onboarding — including process death — and is resumed by
       // PendingCheckInResumer once the user can actually act on it.
       if (!s.isSignedIn || !s.isOnboarded) {
-        if (shopId != null) await setPendingCheckIn(shopId);
+        if (shopId != null) {
+          await setPendingCheckIn(
+            shopId,
+            token: state.uri.queryParameters['t'],
+          );
+        }
         return s.isSignedIn ? Routes.onboarding : Routes.signIn;
       }
 

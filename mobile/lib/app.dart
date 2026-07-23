@@ -92,10 +92,12 @@ class _CheckInLinkHostState extends ConsumerState<CheckInLinkHost> {
 
     // Read-and-clear regardless of role: a parked link an owner can't act on
     // shouldn't linger and fire during some unrelated later session.
-    final shopId = await consumePendingCheckIn();
+    final pending = await consumePendingCheckIn();
     _resuming = false;
 
-    if (shopId == null || role == UserRole.owner || !mounted) return;
-    widget.router.go(Routes.checkInFor(shopId));
+    if (pending == null || role == UserRole.owner || !mounted) return;
+    widget.router.go(
+      Routes.checkInFor(pending.shopId, token: pending.token),
+    );
   }
 }
