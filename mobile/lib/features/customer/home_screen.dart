@@ -19,6 +19,7 @@ import '../shared/widgets/empty_state.dart';
 import '../shared/widgets/shop_card.dart';
 import '../shared/widgets/store_scope.dart';
 import '../shared/widgets/streak_card.dart';
+import 'how_it_works_sheet.dart';
 
 /// Streaks about to lapse come first — the whole point of the screen is to
 /// answer "what needs a visit today".
@@ -175,7 +176,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           const SizedBox(height: Spacing.md),
         ],
-        if (active.isEmpty)
+        if (active.isEmpty) ...[
           EmptyState(
             icon: Icons.monitor_heart_outlined,
             title: 'No streaks yet',
@@ -184,6 +185,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             actionLabel: 'Open scanner',
             onAction: () => context.go(Routes.scanner),
           ),
+          const SizedBox(height: Spacing.sm),
+          Center(
+            child: Semantics(
+              button: true,
+              child: GestureDetector(
+                onTap: () => showHowItWorks(context),
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.all(Spacing.sm),
+                  child: Text(
+                    'How do streaks work?',
+                    style: AppText.body(
+                      size: 14,
+                      weight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
         if (unvisited.isNotEmpty) ...[
           const SectionHeader(title: 'Discover places'),
           _searchBox(),

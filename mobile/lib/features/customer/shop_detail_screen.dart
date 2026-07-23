@@ -267,11 +267,18 @@ class ShopDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: Spacing.xs),
             Text(
-              '${category.wire[0].toUpperCase()}${category.wire.substring(1)} · $address',
+              [
+                '${category.wire[0].toUpperCase()}${category.wire.substring(1)}',
+                // Shops registered before the address field existed have none;
+                // appending it blindly leaves a dangling separator.
+                if (address.trim().isNotEmpty) address.trim(),
+              ].join(' · '),
               style: AppText.body(size: 14),
             ),
-            const SizedBox(height: Spacing.sm),
-            Text(description, style: AppText.body(size: 14, height: 1.45)),
+            if (description.trim().isNotEmpty) ...[
+              const SizedBox(height: Spacing.sm),
+              Text(description, style: AppText.body(size: 14, height: 1.45)),
+            ],
           ],
         ),
       );

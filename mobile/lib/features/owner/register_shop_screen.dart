@@ -18,18 +18,7 @@ import '../shared/widgets/app_toast.dart';
 import '../shared/widgets/gradient_button.dart';
 import '../shared/widgets/scan_overlay.dart';
 import 'choose_plan_screen.dart';
-
-const _categoryOptions = <({ShopCategory value, String label, IconData icon})>[
-  (value: ShopCategory.coffee, label: 'Coffee', icon: Icons.local_cafe_outlined),
-  (value: ShopCategory.ramen, label: 'Ramen', icon: Icons.ramen_dining_outlined),
-  (value: ShopCategory.pizza, label: 'Pizza', icon: Icons.local_pizza_outlined),
-  (value: ShopCategory.bistro, label: 'Bistro', icon: Icons.wine_bar_outlined),
-  (value: ShopCategory.bakery, label: 'Bakery', icon: Icons.bakery_dining_outlined),
-  (value: ShopCategory.smoothie, label: 'Smoothie', icon: Icons.local_drink_outlined),
-  (value: ShopCategory.brunch, label: 'Brunch', icon: Icons.wb_sunny_outlined),
-  (value: ShopCategory.mexican, label: 'Mexican', icon: Icons.restaurant_outlined),
-  (value: ShopCategory.other, label: 'Other', icon: Icons.storefront_outlined),
-];
+import 'widgets/shop_details_fields.dart';
 
 enum _Step { scan, confirm }
 
@@ -49,6 +38,7 @@ class _RegisterShopScreenState extends ConsumerState<RegisterShopScreen> {
     detectionSpeed: DetectionSpeed.noDuplicates,
   );
   final _nameController = TextEditingController();
+  final _addressController = TextEditingController();
   final _descriptionController = TextEditingController();
 
   _Step _step = _Step.scan;
@@ -74,6 +64,7 @@ class _RegisterShopScreenState extends ConsumerState<RegisterShopScreen> {
   void dispose() {
     unawaited(_controller.dispose());
     _nameController.dispose();
+    _addressController.dispose();
     _descriptionController.dispose();
     super.dispose();
   }
@@ -134,6 +125,7 @@ class _RegisterShopScreenState extends ConsumerState<RegisterShopScreen> {
       extra: ChoosePlanArgs(
         shopName: name,
         category: _category,
+        address: _addressController.text.trim(),
         description: _descriptionController.text.trim(),
         sourceQr: _sourceQr,
       ),
@@ -317,32 +309,13 @@ class _RegisterShopScreenState extends ConsumerState<RegisterShopScreen> {
           else if (_qrType == ExternalQrType.upi)
             _detectedBadge(Icons.credit_card, 'Extracted from payment QR'),
           const SizedBox(height: Spacing.lg),
-          _label('Shop name'),
-          TextField(
-            controller: _nameController,
-            onChanged: (_) => setState(() {}),
-            textCapitalization: TextCapitalization.words,
-            style: AppText.body(size: 16, color: AppColors.ink),
-            decoration: _inputDecoration("e.g. Nonna's Kitchen"),
-          ),
-          const SizedBox(height: Spacing.lg),
-          _label('Category'),
-          Wrap(
-            spacing: Spacing.sm,
-            runSpacing: Spacing.sm,
-            children: [
-              for (final opt in _categoryOptions) _categoryChip(opt),
-            ],
-          ),
-          const SizedBox(height: Spacing.lg),
-          _label('Description (optional)'),
-          TextField(
-            controller: _descriptionController,
-            maxLines: 3,
-            style: AppText.body(size: 16, color: AppColors.ink),
-            decoration: _inputDecoration(
-              'Tell customers what makes your food special…',
-            ),
+          ShopDetailsFields(
+            nameController: _nameController,
+            addressController: _addressController,
+            descriptionController: _descriptionController,
+            category: _category,
+            onCategoryChanged: (c) => setState(() => _category = c),
+            onNameChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: Spacing.xl),
           GradientButton(
@@ -353,72 +326,6 @@ class _RegisterShopScreenState extends ConsumerState<RegisterShopScreen> {
           ),
         ],
       );
-
-  Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: Spacing.sm),
-        child: Text(text, style: AppText.heading(size: 15)),
-      );
-
-  InputDecoration _inputDecoration(String hint) => InputDecoration(
-        filled: true,
-        fillColor: AppColors.card,
-        hintText: hint,
-        hintStyle: AppText.body(size: 16, color: AppColors.muted2),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: Spacing.md,
-          vertical: 14,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: Radii.mdAll,
-          borderSide: const BorderSide(color: AppColors.line),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: Radii.mdAll,
-          borderSide: const BorderSide(color: AppColors.primary),
-        ),
-      );
-
-  Widget _categoryChip(({ShopCategory value, String label, IconData icon}) opt) {
-    final selected = _category == opt.value;
-
-    return GestureDetector(
-      onTap: () => setState(() => _category = opt.value),
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(
-          horizontal: Spacing.md,
-          vertical: 10,
-        ),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary : AppColors.card,
-          borderRadius: Radii.pillAll,
-          border: Border.all(
-            color: selected ? AppColors.primary : AppColors.line,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              opt.icon,
-              size: 16,
-              color: selected ? AppColors.primaryInk : AppColors.muted,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              opt.label,
-              style: AppText.body(
-                size: 13,
-                weight: FontWeight.w500,
-                color: selected ? AppColors.primaryInk : AppColors.muted,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _detectedBadge(IconData icon, String text) => Align(
         alignment: Alignment.centerLeft,

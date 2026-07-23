@@ -14,6 +14,7 @@ import '../shared/widgets/app_screen.dart';
 import '../shared/widgets/profile_widgets.dart';
 import '../shared/widgets/role_switcher.dart';
 import '../shared/widgets/store_scope.dart';
+import 'how_it_works_sheet.dart';
 
 class CustomerProfileScreen extends ConsumerWidget {
   const CustomerProfileScreen({super.key});
@@ -70,6 +71,11 @@ class CustomerProfileScreen extends ConsumerWidget {
         const SizedBox(height: Spacing.lg),
         SettingsGroup(
           rows: [
+            SettingsRow(
+              icon: Icons.help_outline,
+              label: 'How streaks work',
+              onTap: () => showHowItWorks(context),
+            ),
             SettingsRow(
               icon: Icons.camera_alt_outlined,
               label: 'Camera permissions',

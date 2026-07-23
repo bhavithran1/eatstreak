@@ -35,6 +35,16 @@ class OwnerProfileScreen extends ConsumerWidget {
           Center(child: _shopBadge(shop.name)),
         ],
         const SizedBox(height: Spacing.xl),
+        if (shop != null) ...[
+          _action(
+            context,
+            icon: Icons.storefront_outlined,
+            title: 'Edit shop details',
+            subtitle: 'Name, category, address and description',
+            route: Routes.editShop,
+          ),
+          const SizedBox(height: Spacing.sm),
+        ],
         _registerShopAction(context, hasShop: shop != null),
         const SizedBox(height: Spacing.lg),
         Text('Account mode', style: AppText.heading(size: 16)),
@@ -91,48 +101,57 @@ class OwnerProfileScreen extends ConsumerWidget {
       );
 
   Widget _registerShopAction(BuildContext context, {required bool hasShop}) =>
-      GestureDetector(
-        onTap: () => context.push(Routes.registerShop),
-        behavior: HitTestBehavior.opaque,
-        child: SurfaceCard(
-          shadow: false,
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.ember2.withValues(alpha: 0.08),
-                  shape: BoxShape.circle,
+      _action(
+        context,
+        icon: Icons.add_circle_outline,
+        title: hasShop ? 'Register another shop' : 'Register your shop',
+        subtitle: 'Scan a QR or enter details to add a shop',
+        route: Routes.registerShop,
+      );
+
+  Widget _action(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String route,
+  }) =>
+      Semantics(
+        button: true,
+        label: '$title. $subtitle',
+        child: GestureDetector(
+          onTap: () => context.push(route),
+          behavior: HitTestBehavior.opaque,
+          child: SurfaceCard(
+            shadow: false,
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.ember2.withValues(alpha: 0.08),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, size: 22, color: AppColors.ember2),
                 ),
-                child: const Icon(
-                  Icons.add_circle_outline,
-                  size: 22,
-                  color: AppColors.ember2,
+                const SizedBox(width: Spacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: AppText.heading(size: 15)),
+                      Text(subtitle, style: AppText.body(size: 12)),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: Spacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      hasShop ? 'Register another shop' : 'Register your shop',
-                      style: AppText.heading(size: 15),
-                    ),
-                    Text(
-                      'Scan a QR or enter details to add a shop',
-                      style: AppText.body(size: 12),
-                    ),
-                  ],
+                const Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: AppColors.muted2,
                 ),
-              ),
-              const Icon(
-                Icons.chevron_right,
-                size: 20,
-                color: AppColors.muted2,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );

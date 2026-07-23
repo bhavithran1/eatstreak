@@ -24,6 +24,7 @@ abstract final class Routes {
   // Shop setup
   static const registerShop = '/register-shop';
   static const choosePlan = '/choose-plan';
+  static const editShop = '/edit-shop';
 
   /// Deep link target: `eatstreak://check-in/<shopId>` and `https://<host>/c/<id>`.
   static const checkIn = '/check-in/:shopId';

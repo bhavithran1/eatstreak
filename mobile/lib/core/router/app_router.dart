@@ -15,6 +15,7 @@ import '../../features/customer/shop_detail_screen.dart';
 import '../../features/customer/shop_not_found_screen.dart';
 import '../../features/customer/vouchers_screen.dart';
 import '../../features/owner/choose_plan_screen.dart';
+import '../../features/owner/edit_shop_screen.dart';
 import '../../features/owner/customers_screen.dart';
 import '../../features/owner/dashboard_screen.dart';
 import '../../features/owner/owner_shell.dart';
@@ -183,6 +184,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           if (args is! ChoosePlanArgs) return const RegisterShopScreen();
           return ChoosePlanScreen(args: args);
         },
+      ),
+      GoRoute(
+        path: Routes.editShop,
+        parentNavigatorKey: _rootKey,
+        builder: (_, _) => const EditShopScreen(),
       ),
       GoRoute(
         path: Routes.checkIn,

@@ -24,12 +24,14 @@ class ChoosePlanArgs {
   const ChoosePlanArgs({
     required this.shopName,
     required this.category,
+    this.address = '',
     this.description = '',
     this.sourceQr = '',
   });
 
   final String shopName;
   final ShopCategory category;
+  final String address;
   final String description;
   final String sourceQr;
 }
@@ -76,7 +78,7 @@ class _ChoosePlanScreenState extends ConsumerState<ChoosePlanScreen> {
       category: widget.args.category,
       emoji: '',
       description: widget.args.description,
-      address: '',
+      address: widget.args.address,
       rewardTiers: plan.rewardTiersFor(shopId),
       streakWindowDays: plan.streakWindowDays,
       createdAt: todayString(),
