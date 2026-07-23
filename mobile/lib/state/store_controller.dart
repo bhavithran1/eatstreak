@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/utils/dates.dart';
 import '../data/models/check_in_token.dart';
 import '../data/models/enums.dart';
 import '../data/models/shop.dart';
@@ -69,6 +70,11 @@ class StoreState {
       );
 }
 
+/// Visits are only read to draw the dashboard's 30-day view, so that is all we
+/// fetch. Reading every visit ever recorded would get slower and more expensive
+/// for exactly the shops doing best.
+String get _visitWindowStart => dateNDaysAgo(29);
+
 class StoreController extends AsyncNotifier<StoreState> {
   EatStreakRepository get _repo => ref.read(repositoryProvider);
 
@@ -97,7 +103,9 @@ class StoreController extends AsyncNotifier<StoreState> {
       role == UserRole.owner
           ? _repo.getVouchersForOwner(uid)
           : _repo.getVouchersForUser(uid),
-      role == UserRole.owner ? _repo.getVisitsForOwner(uid) : _repo.getVisitsForUser(uid),
+      role == UserRole.owner
+          ? _repo.getVisitsForOwner(uid, since: _visitWindowStart)
+          : _repo.getVisitsForUser(uid, since: _visitWindowStart),
     ]);
 
     return StoreState(

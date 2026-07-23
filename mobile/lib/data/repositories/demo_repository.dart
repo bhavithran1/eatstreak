@@ -165,12 +165,21 @@ class DemoRepository implements EatStreakRepository {
       (await _load()).vouchers.where((v) => v.shopOwnerId == ownerId).toList();
 
   @override
-  Future<List<Visit>> getVisitsForUser(String userId) async =>
-      (await _load()).visits.where((v) => v.userId == userId).toList();
+  Future<List<Visit>> getVisitsForUser(String userId, {String? since}) async =>
+      (await _load())
+          .visits
+          .where((v) => v.userId == userId && _onOrAfter(v, since))
+          .toList();
 
   @override
-  Future<List<Visit>> getVisitsForOwner(String ownerId) async =>
-      (await _load()).visits.where((v) => v.shopOwnerId == ownerId).toList();
+  Future<List<Visit>> getVisitsForOwner(String ownerId, {String? since}) async =>
+      (await _load())
+          .visits
+          .where((v) => v.shopOwnerId == ownerId && _onOrAfter(v, since))
+          .toList();
+
+  static bool _onOrAfter(Visit v, String? since) =>
+      since == null || v.timestamp.compareTo(since) >= 0;
 
   @override
   Future<List<Visit>> getVisitsForShop(String shopId) async =>

@@ -40,8 +40,11 @@ abstract interface class EatStreakRepository {
   Future<List<Voucher>> getVouchersForOwner(String ownerId);
 
   // ---- visits (read-only) --------------------------------------------------
-  Future<List<Visit>> getVisitsForUser(String userId);
-  Future<List<Visit>> getVisitsForOwner(String ownerId);
+  /// [since] is an inclusive `yyyy-MM-dd` lower bound. Visits are only ever
+  /// read for the dashboard's rolling window, so an unbounded read would grow
+  /// without limit for the shops that succeed most.
+  Future<List<Visit>> getVisitsForUser(String userId, {String? since});
+  Future<List<Visit>> getVisitsForOwner(String ownerId, {String? since});
   Future<List<Visit>> getVisitsForShop(String shopId);
 
   // ---- shop suggestions ----------------------------------------------------

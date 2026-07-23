@@ -115,13 +115,30 @@ class FirestoreRepository implements EatStreakRepository {
 
   // ---- visits (read-only) --------------------------------------------------
 
-  @override
-  Future<List<Visit>> getVisitsForUser(String userId) async =>
-      _map(await _visits.where('userId', isEqualTo: userId).get(), Visit.fromJson);
+  /// ISO-8601 timestamps sort lexicographically, so a `yyyy-MM-dd` string is a
+  /// valid lower bound without storing a second field.
+  Query<Map<String, dynamic>> _visitsSince(
+    Query<Map<String, dynamic>> query,
+    String? since,
+  ) =>
+      since == null
+          ? query
+          : query.where('timestamp', isGreaterThanOrEqualTo: since);
 
   @override
-  Future<List<Visit>> getVisitsForOwner(String ownerId) async =>
-      _map(await _visits.where('shopOwnerId', isEqualTo: ownerId).get(), Visit.fromJson);
+  Future<List<Visit>> getVisitsForUser(String userId, {String? since}) async =>
+      _map(
+        await _visitsSince(_visits.where('userId', isEqualTo: userId), since).get(),
+        Visit.fromJson,
+      );
+
+  @override
+  Future<List<Visit>> getVisitsForOwner(String ownerId, {String? since}) async =>
+      _map(
+        await _visitsSince(_visits.where('shopOwnerId', isEqualTo: ownerId), since)
+            .get(),
+        Visit.fromJson,
+      );
 
   @override
   Future<List<Visit>> getVisitsForShop(String shopId) async =>

@@ -60,6 +60,23 @@ class DashboardScreen extends ConsumerWidget {
                 100)
             .round();
 
+    // What the reward programme has actually cost and promised. Outstanding is
+    // the number that matters most: unredeemed, unexpired vouchers are a
+    // discount the shop has already committed to and could be handed any day.
+    final vouchers = state.vouchers.where((v) => v.shopId == shop.id).toList();
+    final redeemed = vouchers.where((v) => v.isRedeemed).toList();
+    final outstanding = vouchers
+        .where((v) => !v.isRedeemed && daysFromNow(v.expiresAt) > 0)
+        .toList();
+    final redemptionRate = vouchers.isEmpty
+        ? 0
+        : ((redeemed.length / vouchers.length) * 100).round();
+    final avgDiscount = redeemed.isEmpty
+        ? 0
+        : (redeemed.fold<int>(0, (sum, v) => sum + v.discountPercent) /
+                redeemed.length)
+            .round();
+
     final segments = <({String label, int count, Color color, IconData icon})>[
       (
         label: 'Regulars (30+ days)',
@@ -192,6 +209,56 @@ class DashboardScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text('Reward programme', style: AppText.heading(size: 15)),
+              const SizedBox(height: Spacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: _miniStat('${vouchers.length}', 'Earned'),
+                  ),
+                  Expanded(
+                    child: _miniStat('${redeemed.length}', 'Redeemed'),
+                  ),
+                  Expanded(
+                    child: _miniStat(
+                      '${outstanding.length}',
+                      'Outstanding',
+                      color: outstanding.isEmpty
+                          ? AppColors.ink
+                          : AppColors.warning,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: Spacing.md),
+              const Divider(color: AppColors.line, height: 1),
+              const SizedBox(height: Spacing.md),
+              _programmeRow(
+                'Redemption rate',
+                vouchers.isEmpty ? '—' : '$redemptionRate%',
+              ),
+              const SizedBox(height: Spacing.sm),
+              _programmeRow(
+                'Average discount redeemed',
+                redeemed.isEmpty ? '—' : '$avgDiscount%',
+              ),
+              const SizedBox(height: Spacing.sm),
+              Text(
+                outstanding.isEmpty
+                    ? 'No unredeemed rewards are outstanding.'
+                    : '${outstanding.length} reward'
+                        '${outstanding.length == 1 ? '' : 's'} could still be '
+                        'claimed before expiry.',
+                style: AppText.body(size: 12, color: AppColors.muted2),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: Spacing.md),
+        SurfaceCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text('Customer segments', style: AppText.heading(size: 15)),
               const SizedBox(height: Spacing.md),
               for (final seg in segments) ...[
@@ -261,6 +328,29 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ],
         ),
+      );
+
+  Widget _miniStat(String value, String label, {Color color = AppColors.ink}) =>
+      Column(
+        children: [
+          Text(
+            value,
+            style: AppText.heading(size: 20, weight: FontWeight.w700, color: color),
+          ),
+          const SizedBox(height: 2),
+          Text(label, style: AppText.body(size: 11)),
+        ],
+      );
+
+  Widget _programmeRow(String label, String value) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: AppText.body(size: 13)),
+          Text(
+            value,
+            style: AppText.heading(size: 14, weight: FontWeight.w600),
+          ),
+        ],
       );
 
   Widget _quickAction(IconData icon, String label, VoidCallback onTap) =>
