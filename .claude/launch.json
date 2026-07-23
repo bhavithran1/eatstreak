@@ -1,0 +1,27 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "eatstreak",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4178"],
+      "port": 4178
+    },
+    {
+      "name": "flutter-web",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": [
+        "run",
+        "-d",
+        "web-server",
+        "--web-port",
+        "8090",
+        "--web-hostname",
+        "0.0.0.0",
+        "--dart-define=DEMO_MODE=true"
+      ],
+      "port": 8090,
+      "cwd": "mobile"
+    }
+  ]
+}
