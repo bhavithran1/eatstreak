@@ -72,9 +72,15 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
 
 ## Rules that break things when ignored
 
-- `functions/src/streakLogic.ts` and `mobile/lib/domain/streak_logic.dart` are ports of
-  each other and must stay in agreement — including embers and repair. Both have test
-  suites; update them together.
+- **Ported logic must stay in agreement, and the agreement must be tested.** The pairs:
+  - `functions/src/streakLogic.ts` ↔ `mobile/lib/domain/streak_logic.dart` (check-in,
+    embers, repair) — tested by `streakLogic.test.ts` and `test/domain/streak_logic_test.dart`
+  - `functions/src/streakLogic.ts` ↔ `mobile/lib/core/utils/formatters.dart` (voucher
+    codes) — tested by the "voucher codes" block and `test/core/formatters_test.dart`
+
+  A shared value belongs in a named constant on both sides, with a test asserting the
+  number literally. The voucher code generators drifted to 4 and 6 characters and nobody
+  noticed for months, because "keep these in sync" was a comment rather than an assertion.
 - Screens talk only to `EatStreakRepository`. Adding a data method means implementing it
   in **both** `DemoRepository` and `FirestoreRepository`.
 - **Screens read the store through `StoreScope`**, never `store.value ?? StoreState()` —

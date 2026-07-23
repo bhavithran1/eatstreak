@@ -25,8 +25,22 @@ If all four pass **and** `$ARGUMENTS` contains `device`, put it on the phone:
 5. `cd mobile && flutter build ios --release --dart-define-from-file=env.json`
 6. `xcrun devicectl device install app --device 00008140-00167C9E2422201C build/ios/iphoneos/Runner.app`
 
-`unavailable` from step 6 means the phone is asleep or locked — ask the user to wake it
-and retry. Mention that free provisioning gives the build about 7 days.
+The build (step 5) is the part that proves the change compiles for a real device, and it
+works whether or not the phone is there. **Treat the install as a separate, optional
+step** — it is the one part of this loop that depends on hardware you don't control.
+
+`xcrun devicectl list devices` reporting `unavailable`, or error 1011, means the phone is
+locked, asleep, or off the same network. That is not a failure of the change. Retry once
+in case it just woke; if it still fails, **stop retrying and hand it over**:
+
+```bash
+cd mobile && xcrun devicectl device install app --device 00008140-00167C9E2422201C build/ios/iphoneos/Runner.app
+```
+
+Say plainly that the build succeeded and the install did not, so the user knows the
+artifact is ready and what is left. Never describe a change as "on the phone" when only
+the build completed. Mention that free provisioning gives the build about 7 days from
+install, not from build.
 
 ## Then say what isn't live yet
 
