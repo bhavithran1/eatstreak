@@ -25,6 +25,7 @@ abstract final class Routes {
   static const registerShop = '/register-shop';
   static const choosePlan = '/choose-plan';
   static const editShop = '/edit-shop';
+  static const verifyVoucher = '/verify-voucher';
 
   /// Deep link target: `eatstreak://check-in/<shopId>` and `https://<host>/c/<id>`.
   static const checkIn = '/check-in/:shopId';

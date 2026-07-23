@@ -19,7 +19,9 @@ class VoucherCard extends StatelessWidget {
 
   final Voucher voucher;
 
-  /// Null hides the Use button — e.g. on an already-redeemed voucher.
+  /// Redemption is the owner's to confirm, so customers never see this. Kept
+  /// for the owner-side verification screen, which shows the voucher it is
+  /// about to honour.
   final VoidCallback? onRedeem;
   final VoidCallback? onTap;
 

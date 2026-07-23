@@ -64,6 +64,12 @@ abstract interface class EatStreakRepository {
   /// [token] is the single-use code scanned from the owner's screen.
   Future<VisitResult> checkIn(String shopId, {String? token});
 
-  /// Redeem a voucher. Double-redeem is rejected.
-  Future<Voucher> redeemVoucher(String voucherId);
+  /// Spend embers to bring a broken streak back. The server decides whether it
+  /// is eligible and what it costs — the client only offers the button.
+  Future<Streak> repairStreak(String shopId);
+
+  /// Redeem a voucher by its printed code. Called by the *owner*: redemption is
+  /// theirs to confirm, so the customer can neither fake nor accidentally burn
+  /// a discount. Double-redeem is rejected.
+  Future<Voucher> redeemVoucherByCode(String code);
 }

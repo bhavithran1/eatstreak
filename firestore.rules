@@ -27,12 +27,20 @@ service cloud.firestore {
       allow read: if isSelf(uid);
       // Client may create/update its own profile (onboarding: name + role).
       // Role is immutable once set, and uid/email are pinned to the token.
+      //
+      // `embers` is spendable currency — it buys streak repairs — so it is
+      // written only by Cloud Functions. A client that could set its own
+      // balance could repair every streak for free.
       allow create: if isSelf(uid)
                     && request.resource.data.id == uid
-                    && request.resource.data.role in ['customer', 'owner'];
+                    && request.resource.data.role in ['customer', 'owner']
+                    && (!('embers' in request.resource.data)
+                        || request.resource.data.embers == 0);
       allow update: if isSelf(uid)
                     && request.resource.data.id == uid
-                    && request.resource.data.role == resource.data.role;
+                    && request.resource.data.role == resource.data.role
+                    && request.resource.data.get('embers', 0)
+                       == resource.data.get('embers', 0);
       allow delete: if false;
     }
 

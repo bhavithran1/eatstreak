@@ -5,7 +5,16 @@ import { randomBytes } from 'crypto';
 
 import { Shop, Streak, Visit, Voucher, VisitResult, CheckInTokenDoc } from './types';
 import { toDateStringInTZ, DEFAULT_TIME_ZONE, addDays } from './dates';
-import { computeCheckIn, qualifyingTiers, generateVoucherCode, StreakCore } from './streakLogic';
+import {
+  computeCheckIn,
+  qualifyingTiers,
+  generateVoucherCode,
+  StreakCore,
+  EMBERS_PER_CHECK_IN,
+  repairCost,
+  repairEligibility,
+  applyRepair,
+} from './streakLogic';
 import {
   CHECK_IN_TOKEN_TTL_SECONDS,
   checkInTokenDocId,
@@ -157,6 +166,14 @@ export const checkIn = onCall(async (request: CallableRequest<{ shopId?: string;
     const tiersToMint = candidateTiers.filter((_, i) => !voucherSnaps[i].exists);
 
     // ---- writes ----
+    // Embers are earned only by actually turning up, which is what makes them
+    // a fair price for repairing a streak later.
+    tx.set(
+      db.collection('users').doc(uid),
+      { embers: admin.firestore.FieldValue.increment(EMBERS_PER_CHECK_IN) },
+      { merge: true },
+    );
+
     const visitRef = db.collection('visits').doc();
     const visit: Visit = {
       id: visitRef.id,
@@ -204,34 +221,130 @@ export const checkIn = onCall(async (request: CallableRequest<{ shopId?: string;
 });
 
 /**
- * Redeem a voucher. Server-side so redemption can't be faked and double-redeem
- * is impossible (transactional check of isRedeemed).
+ * Repair a broken streak by spending embers.
+ *
+ * Losing a long streak should cost something — that is what makes it worth
+ * keeping — but the price is paid in embers earned by visiting, never in money.
+ * Charging a customer for *not* visiting reads as a fine and is the fastest way
+ * to lose them. The cost rises with the streak, and so does the customer's
+ * ability to pay it, because embers come from the visits that built it.
  */
-export const redeemVoucher = onCall(async (request: CallableRequest<{ voucherId?: string }>): Promise<Voucher> => {
-  const uid = request.auth?.uid;
-  if (!uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+export const repairStreak = onCall(
+  async (request: CallableRequest<{ shopId?: string }>) => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
 
-  const id = request.data?.voucherId;
-  if (!id || typeof id !== 'string') {
-    throw new HttpsError('invalid-argument', 'voucherId is required.');
-  }
-
-  const ref = db.collection('vouchers').doc(id);
-
-  return db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists) throw new HttpsError('not-found', 'Voucher does not exist.');
-    const voucher = snap.data() as Voucher;
-
-    if (voucher.userId !== uid) {
-      throw new HttpsError('permission-denied', 'This voucher is not yours.');
-    }
-    if (voucher.isRedeemed) {
-      throw new HttpsError('failed-precondition', 'This voucher was already redeemed.');
+    const shopId = request.data?.shopId;
+    if (!shopId || typeof shopId !== 'string') {
+      throw new HttpsError('invalid-argument', 'shopId is required.');
     }
 
-    const redeemedAt = new Date().toISOString();
-    tx.update(ref, { isRedeemed: true, redeemedAt });
-    return { ...voucher, isRedeemed: true, redeemedAt };
-  });
-});
+    const shopSnap = await db.collection('shops').doc(shopId).get();
+    if (!shopSnap.exists) throw new HttpsError('not-found', 'Shop not found.');
+    const shop = shopSnap.data() as Shop;
+    const todayStr = toDateStringInTZ(new Date(), shop.timeZone || DEFAULT_TIME_ZONE);
+
+    const sRef = db.collection('streaks').doc(streakId(uid, shopId));
+    const uRef = db.collection('users').doc(uid);
+
+    return db.runTransaction(async (tx) => {
+      const [sSnap, uSnap] = await tx.getAll(sRef, uRef);
+      if (!sSnap.exists) {
+        throw new HttpsError('not-found', 'You have no streak at this shop.');
+      }
+      const streak = sSnap.data() as Streak;
+
+      // Eligibility is decided here, never by the client: the same rule the app
+      // uses to offer the repair has to gate the write.
+      const eligibility = repairEligibility(streak, todayStr, shop.streakWindowDays);
+      if (eligibility !== 'repairable') {
+        throw new HttpsError(
+          'failed-precondition',
+          eligibility === 'not_broken'
+            ? 'That streak is still alive — nothing to repair.'
+            : eligibility === 'too_short'
+              ? 'That streak is too short to repair. Just visit again to start a new one.'
+              : 'That streak has been broken too long to repair.',
+        );
+      }
+
+      const cost = repairCost(streak.currentStreakDays);
+      const embers = (uSnap.data()?.embers as number) ?? 0;
+      if (embers < cost) {
+        throw new HttpsError(
+          'failed-precondition',
+          `This repair costs ${cost} embers and you have ${embers}. Check in to earn more.`,
+        );
+      }
+
+      const repaired: Streak = { ...streak, ...applyRepair(streak, todayStr) };
+      tx.set(sRef, repaired);
+      tx.set(uRef, { embers: embers - cost }, { merge: true });
+
+      return { streak: repaired, cost, embersRemaining: embers - cost };
+    });
+  },
+);
+
+/**
+ * Redeem a voucher by its printed code — called by the shop owner, not the
+ * customer.
+ *
+ * Redemption used to be customer self-serve: they tapped "mark as used" on
+ * their own phone and the owner had no way to check the voucher was real,
+ * unspent, or even theirs. Moving the act to the owner makes it verifiable, and
+ * removes the customer's ability to burn a voucher by accident before staff are
+ * ready.
+ */
+export const redeemVoucherByCode = onCall(
+  async (request: CallableRequest<{ code?: string }>): Promise<Voucher> => {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError('unauthenticated', 'You must be signed in.');
+
+    const raw = request.data?.code;
+    if (!raw || typeof raw !== 'string') {
+      throw new HttpsError('invalid-argument', 'A voucher code is required.');
+    }
+    const code = raw.trim().toUpperCase();
+
+    // Scoped to the caller's own shops, so an owner can never redeem against
+    // someone else's voucher even with a valid-looking code.
+    const matches = await db
+      .collection('vouchers')
+      .where('shopOwnerId', '==', uid)
+      .where('code', '==', code)
+      .get();
+
+    if (matches.empty) {
+      throw new HttpsError('not-found', 'No voucher with that code at your shop.');
+    }
+
+    const open = matches.docs.filter((d) => (d.data() as Voucher).isRedeemed !== true);
+    if (open.length === 0) {
+      throw new HttpsError('failed-precondition', 'That voucher has already been used.');
+    }
+    if (open.length > 1) {
+      throw new HttpsError(
+        'failed-precondition',
+        'More than one voucher matches that code. Ask the customer to open it in their app.',
+      );
+    }
+    const ref = open[0].ref;
+
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const voucher = snap.data() as Voucher;
+
+      if (voucher.isRedeemed) {
+        throw new HttpsError('failed-precondition', 'That voucher has already been used.');
+      }
+      if (new Date(voucher.expiresAt).getTime() < Date.now()) {
+        throw new HttpsError('failed-precondition', 'That voucher has expired.');
+      }
+
+      const redeemedAt = new Date().toISOString();
+      tx.update(ref, { isRedeemed: true, redeemedAt });
+      return { ...voucher, isRedeemed: true, redeemedAt };
+    });
+  },
+);

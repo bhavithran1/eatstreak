@@ -179,9 +179,29 @@ class DashboardScreen extends ConsumerWidget {
             const SizedBox(width: Spacing.sm),
             Expanded(
               child: _quickAction(
+                Icons.confirmation_number_outlined,
+                'Verify voucher',
+                () => context.push(Routes.verifyVoucher),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: Spacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: _quickAction(
                 Icons.tune,
                 'Edit rewards',
                 () => context.go(Routes.ownerRewards),
+              ),
+            ),
+            const SizedBox(width: Spacing.sm),
+            Expanded(
+              child: _quickAction(
+                Icons.people_outline,
+                'Customers',
+                () => context.go(Routes.ownerCustomers),
               ),
             ),
           ],

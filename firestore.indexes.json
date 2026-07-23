@@ -33,6 +33,14 @@
       ]
     },
     {
+      "collectionGroup": "vouchers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "shopOwnerId", "order": "ASCENDING" },
+        { "fieldPath": "code", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "streaks",
       "queryScope": "COLLECTION",
       "fields": [

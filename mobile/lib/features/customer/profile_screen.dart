@@ -59,6 +59,11 @@ class CustomerProfileScreen extends ConsumerWidget {
               value: '${state.vouchers.length}',
               icon: Icons.confirmation_number_outlined
             ),
+            (
+              label: 'Embers',
+              value: '${user?.embers ?? 0}',
+              icon: Icons.local_fire_department_outlined
+            ),
           ],
         ),
         const SizedBox(height: Spacing.xl),

@@ -166,17 +166,38 @@ class StoreController extends AsyncNotifier<StoreState> {
     return result;
   }
 
-  Future<void> redeemVoucher(String voucherId) async {
-    final updated = await _repo.redeemVoucher(voucherId);
+  /// Owner-confirmed redemption. The customer shows the code; the owner enters
+  /// it. Returns the voucher so the owner can see what they just honoured.
+  Future<Voucher> redeemVoucherByCode(String code) async {
+    final updated = await _repo.redeemVoucherByCode(code);
+    final current = state.value ?? const StoreState();
+
+    final known = current.vouchers.any((v) => v.id == updated.id);
+    state = AsyncValue.data(
+      current.copyWith(
+        vouchers: known
+            ? [for (final v in current.vouchers) v.id == updated.id ? updated : v]
+            : [...current.vouchers, updated],
+      ),
+    );
+    return updated;
+  }
+
+  /// Spend embers to bring a broken streak back. The balance lives on the user
+  /// document, so refresh it afterwards to reflect what was spent.
+  Future<Streak> repairStreak(String shopId) async {
+    final repaired = await _repo.repairStreak(shopId);
     final current = state.value ?? const StoreState();
 
     state = AsyncValue.data(
       current.copyWith(
-        vouchers: [
-          for (final v in current.vouchers) v.id == updated.id ? updated : v,
+        streaks: [
+          for (final s in current.streaks) s.id == repaired.id ? repaired : s,
         ],
       ),
     );
+    await ref.read(authControllerProvider.notifier).refreshUserDoc();
+    return repaired;
   }
 
   Future<void> updateShop(Shop shop) async {

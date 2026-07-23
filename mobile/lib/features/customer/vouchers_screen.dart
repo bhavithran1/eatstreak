@@ -5,11 +5,9 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/dates.dart';
-import '../../core/utils/errors.dart';
 import '../../data/models/voucher.dart';
 import '../../state/store_controller.dart';
 import '../shared/widgets/app_screen.dart';
-import '../shared/widgets/app_toast.dart';
 import '../shared/widgets/empty_state.dart';
 import '../shared/widgets/store_scope.dart';
 import '../shared/widgets/voucher_card.dart';
@@ -25,52 +23,6 @@ class VouchersScreen extends ConsumerStatefulWidget {
 
 class _VouchersScreenState extends ConsumerState<VouchersScreen> {
   _Tab _tab = _Tab.active;
-
-  Future<void> _redeem(String voucherId) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.card2,
-        shape: RoundedRectangleBorder(borderRadius: Radii.lgAll),
-        title: Text('Use voucher', style: AppText.heading(size: 18)),
-        content: Text(
-          'Show this to staff to apply your discount. Mark as used?',
-          style: AppText.body(size: 14, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancel', style: AppText.body(size: 14)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(
-              'Mark as used',
-              style: AppText.body(
-                size: 14,
-                weight: FontWeight.w600,
-                color: AppColors.primary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) return;
-
-    try {
-      await ref.read(storeControllerProvider.notifier).redeemVoucher(voucherId);
-    } catch (e) {
-      if (mounted) {
-        AppToast.show(context, friendlyErrorMessage(e), type: ToastType.error);
-      }
-      return;
-    }
-    if (mounted) {
-      AppToast.show(context, 'Voucher redeemed!', type: ToastType.success);
-    }
-  }
 
   @override
   Widget build(BuildContext context) =>
@@ -91,7 +43,7 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
 
     return AppScreen(
       title: 'Vouchers',
-      subtitle: 'Use available vouchers before they expire.',
+      subtitle: 'Show a code to staff — they apply the discount for you.',
       onRefresh: ref.read(storeControllerProvider.notifier).refresh,
       children: [
         _tabs(groups),
@@ -117,7 +69,6 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
               padding: const EdgeInsets.only(bottom: Spacing.sm),
               child: VoucherCard(
                 voucher: v,
-                onRedeem: _tab == _Tab.active ? () => _redeem(v.id) : null,
               ),
             ),
       ],

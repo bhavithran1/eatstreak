@@ -51,7 +51,13 @@ class FirestoreRepository implements EatStreakRepository {
 
   @override
   Future<void> updateUser(AppUser user) =>
-      _users.doc(user.id).set(user.toJson(), SetOptions(merge: true));
+      // `embers` is server-owned: Cloud Functions increment it on check-in and
+      // spend it on streak repairs. Writing the client's copy back would race
+      // with those increments, and the security rules reject it outright.
+      _users.doc(user.id).set(
+            user.toJson()..remove('embers'),
+            SetOptions(merge: true),
+          );
 
   // ---- shops ---------------------------------------------------------------
 
@@ -179,10 +185,19 @@ class FirestoreRepository implements EatStreakRepository {
   }
 
   @override
-  Future<Voucher> redeemVoucher(String voucherId) async {
+  Future<Streak> repairStreak(String shopId) async {
     final result = await _functions
-        .httpsCallable('redeemVoucher')
-        .call<Map<String, dynamic>>({'voucherId': voucherId});
+        .httpsCallable('repairStreak')
+        .call<Map<String, dynamic>>({'shopId': shopId});
+    final data = Map<String, dynamic>.from(result.data);
+    return Streak.fromJson(Map<String, dynamic>.from(data['streak'] as Map));
+  }
+
+  @override
+  Future<Voucher> redeemVoucherByCode(String code) async {
+    final result = await _functions
+        .httpsCallable('redeemVoucherByCode')
+        .call<Map<String, dynamic>>({'code': code});
     return Voucher.fromJson(Map<String, dynamic>.from(result.data));
   }
 }

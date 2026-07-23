@@ -149,4 +149,56 @@ void main() {
       expect(daysBetween('2026-03-01', '2026-04-01'), 31);
     });
   });
+
+  // Ported from the "embers & repair" section of streakLogic.test.ts.
+  group('repairCost', () {
+    test('rises with the streak, in bands', () {
+      expect(repairCost(2), 0);
+      expect(repairCost(3), 2);
+      expect(repairCost(6), 2);
+      expect(repairCost(7), 5);
+      expect(repairCost(29), 5);
+      expect(repairCost(30), 15);
+      expect(repairCost(100), 15);
+      expect(repairCost(3) < repairCost(7), isTrue);
+      expect(repairCost(7) < repairCost(30), isTrue);
+    });
+  });
+
+  group('repairEligibility', () {
+    test('a streak inside its window is not broken', () {
+      expect(
+        repairEligibility(10, addDays(today, -2), today, 3),
+        RepairEligibility.notBroken,
+      );
+    });
+
+    test('just past the window is repairable', () {
+      expect(
+        repairEligibility(10, addDays(today, -4), today, 3),
+        RepairEligibility.repairable,
+      );
+    });
+
+    test('a 2-day streak is too short to be worth repairing', () {
+      expect(
+        repairEligibility(2, addDays(today, -4), today, 3),
+        RepairEligibility.tooShort,
+      );
+    });
+
+    test('past the grace period it is gone for good', () {
+      expect(
+        repairEligibility(30, addDays(today, -6), today, 3),
+        RepairEligibility.tooLate,
+      );
+    });
+
+    test('never having visited is not a break', () {
+      expect(
+        repairEligibility(0, '', today, 3),
+        RepairEligibility.notBroken,
+      );
+    });
+  });
 }

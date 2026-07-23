@@ -11,6 +11,7 @@ import '../../core/utils/formatters.dart';
 import '../../data/models/enums.dart';
 import '../../data/models/shop.dart';
 import '../../data/models/streak.dart';
+import '../../domain/streak_logic.dart';
 import '../../domain/streak_service.dart';
 import '../../state/store_controller.dart';
 import '../shared/widgets/app_screen.dart';
@@ -20,6 +21,7 @@ import '../shared/widgets/shop_card.dart';
 import '../shared/widgets/store_scope.dart';
 import '../shared/widgets/streak_card.dart';
 import 'how_it_works_sheet.dart';
+import 'repair_streak_card.dart';
 
 /// Streaks about to lapse come first — the whole point of the screen is to
 /// answer "what needs a visit today".
@@ -93,6 +95,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 s.category.wire.toLowerCase().contains(query))
             .toList();
 
+    // Streaks that just lapsed but are still inside the repair grace period.
+    final today = todayString();
+    final repairable = [
+      for (final s in active)
+        if (repairEligibility(
+              s.streak.currentStreakDays,
+              s.streak.lastVisitDate,
+              today,
+              s.shop.streakWindowDays,
+            ) ==
+            RepairEligibility.repairable)
+          s,
+    ];
+    final embers = state.currentUser?.embers ?? 0;
+
     final firstName = (state.currentUser?.name ?? '').split(' ').first;
 
     return AppScreen(
@@ -133,6 +150,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ],
         ),
+        for (final r in repairable) ...[
+          const SizedBox(height: Spacing.sm),
+          RepairStreakCard(streak: r.streak, shop: r.shop, embers: embers),
+        ],
         if (urgentCount > 0) ...[
           const SizedBox(height: Spacing.sm),
           _UrgentBanner(

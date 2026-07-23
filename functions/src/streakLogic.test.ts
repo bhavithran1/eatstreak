@@ -3,7 +3,7 @@
 //
 // Covers the exact scenarios from the plan's verification section.
 
-import { computeCheckIn, qualifyingTiers, StreakCore } from './streakLogic';
+import { computeCheckIn, qualifyingTiers, StreakCore, repairCost, repairEligibility, applyRepair } from './streakLogic';
 import { toDateStringInTZ, addDays } from './dates';
 import { RewardTier } from './types';
 
@@ -134,6 +134,55 @@ const tiers: RewardTier[] = [
   const d = new Date('2026-07-16T16:30:00Z');
   eq('KL tz rolls to next day', toDateStringInTZ(d, 'Asia/Kuala_Lumpur'), '2026-07-17');
   eq('UTC stays same day', toDateStringInTZ(d, 'UTC'), '2026-07-16');
+}
+
+
+// --- embers & repair --------------------------------------------------------
+
+{
+  eq('repair: sub-3-day streak is free/ineligible', repairCost(2), 0);
+  eq('repair: 3-day costs 2', repairCost(3), 2);
+  eq('repair: 6-day costs 2', repairCost(6), 2);
+  eq('repair: 7-day costs 5', repairCost(7), 5);
+  eq('repair: 29-day costs 5', repairCost(29), 5);
+  eq('repair: 30-day costs 15', repairCost(30), 15);
+  eq('repair: 100-day costs 15', repairCost(100), 15);
+  assert('repair: price rises with streak', repairCost(3) < repairCost(7) && repairCost(7) < repairCost(30));
+
+  // window 3: visited TODAY-2 is still alive, TODAY-4 is broken.
+  const alive = { currentStreakDays: 10, lastVisitDate: addDays(TODAY, -2) };
+  eq('eligibility: inside window is not broken',
+    repairEligibility(alive, TODAY, 3), 'not_broken');
+
+  const broken = { currentStreakDays: 10, lastVisitDate: addDays(TODAY, -4) };
+  eq('eligibility: just past the window is repairable',
+    repairEligibility(broken, TODAY, 3), 'repairable');
+
+  const shortStreak = { currentStreakDays: 2, lastVisitDate: addDays(TODAY, -4) };
+  eq('eligibility: a 2-day streak is too short to repair',
+    repairEligibility(shortStreak, TODAY, 3), 'too_short');
+
+  const abandoned = { currentStreakDays: 30, lastVisitDate: addDays(TODAY, -6) };
+  eq('eligibility: past the grace period it is gone for good',
+    repairEligibility(abandoned, TODAY, 3), 'too_late');
+
+  const never = { currentStreakDays: 0, lastVisitDate: '' };
+  eq('eligibility: no visits yet is not a break',
+    repairEligibility(never, TODAY, 3), 'not_broken');
+
+  // A repair restores the streak without counting as a visit.
+  const core = {
+    currentStreakDays: 12, longestStreakDays: 12, totalVisits: 30,
+    lastVisitDate: addDays(TODAY, -4), streakStartDate: '2026-01-01', isStreakAlive: false,
+  };
+  const repaired = applyRepair(core, TODAY);
+  eq('repair: streak length is preserved, not incremented', repaired.currentStreakDays, 12);
+  eq('repair: totalVisits unchanged (a repair is not a visit)', repaired.totalVisits, 30);
+  eq('repair: alive again', repaired.isStreakAlive, true);
+  eq('repair: reads as visited yesterday', repaired.lastVisitDate, addDays(TODAY, -1));
+  // ...which means checking in today still increments rather than being a no-op.
+  eq('repair: a check-in today still counts',
+    computeCheckIn(repaired, TODAY, 3).streak.currentStreakDays, 13);
 }
 
 // --- summary ----------------------------------------------------------------

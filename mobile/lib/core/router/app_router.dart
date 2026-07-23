@@ -22,6 +22,7 @@ import '../../features/owner/owner_shell.dart';
 import '../../features/owner/profile_screen.dart' as owner;
 import '../../features/owner/qr_code_screen.dart';
 import '../../features/owner/register_shop_screen.dart';
+import '../../features/owner/verify_voucher_screen.dart';
 import '../../features/owner/rewards_screen.dart';
 import '../../state/auth_controller.dart';
 import '../theme/app_colors.dart';
@@ -189,6 +190,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: Routes.editShop,
         parentNavigatorKey: _rootKey,
         builder: (_, _) => const EditShopScreen(),
+      ),
+      GoRoute(
+        path: Routes.verifyVoucher,
+        parentNavigatorKey: _rootKey,
+        builder: (_, _) => const VerifyVoucherScreen(),
       ),
       GoRoute(
         path: Routes.checkIn,

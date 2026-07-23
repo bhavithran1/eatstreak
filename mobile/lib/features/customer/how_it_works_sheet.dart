@@ -64,9 +64,16 @@ class _HowItWorksSheet extends StatelessWidget {
             _step(
               Icons.confirmation_number_outlined,
               'Use a voucher',
-              'Earned vouchers live in the Vouchers tab. Show one to staff '
-                  'and mark it used — that can only be done once, so wait '
-                  'until they are ready.',
+              'Earned vouchers live in the Vouchers tab. Show the code to '
+                  'staff and they apply the discount — you never mark it used '
+                  'yourself, so it can\'t be spent by accident.',
+            ),
+            _step(
+              Icons.local_fire_department_outlined,
+              'Embers save a broken streak',
+              'Every check-in earns one ember. If a streak lapses you have a '
+                  'couple of days to spend embers repairing it — longer '
+                  'streaks cost more to save.',
               last: true,
             ),
           ],

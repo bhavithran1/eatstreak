@@ -305,6 +305,10 @@ class DemoRepository implements EatStreakRepository {
       }
       d.visits.add(visit);
       d.vouchers.addAll(newVouchers);
+      final ui = d.users.indexWhere((u) => u.id == demoUid);
+      if (ui >= 0) {
+        d.users[ui] = d.users[ui].withEmbers(d.users[ui].embers + embersPerCheckIn);
+      }
     });
 
     return VisitResult(
@@ -317,15 +321,61 @@ class DemoRepository implements EatStreakRepository {
   }
 
   @override
-  Future<Voucher> redeemVoucher(String voucherId) async {
+  Future<Streak> repairStreak(String shopId) async {
     final data = await _load();
-    final voucher = data.vouchers.where((v) => v.id == voucherId).firstOrNull;
+    final shop = data.shops.where((s) => s.id == shopId).firstOrNull;
+    final streak = data.streaks
+        .where((s) => s.userId == demoUid && s.shopId == shopId)
+        .firstOrNull;
+    if (shop == null || streak == null) {
+      throw StateError('You have no streak at this shop.');
+    }
+
+    final todayStr = toDateString(DateTime.now());
+    final eligibility = repairEligibility(
+      streak.currentStreakDays,
+      streak.lastVisitDate,
+      todayStr,
+      shop.streakWindowDays,
+    );
+    if (eligibility != RepairEligibility.repairable) {
+      throw StateError('That streak cannot be repaired.');
+    }
+
+    final cost = repairCost(streak.currentStreakDays);
+    final user = data.users.where((u) => u.id == demoUid).firstOrNull;
+    final embers = user?.embers ?? 0;
+    if (embers < cost) {
+      throw StateError('This repair costs $cost embers and you have $embers.');
+    }
+
+    // Mirrors applyRepair() on the server: alive again, as though the last
+    // visit had been yesterday, and never counted as a visit.
+    final repaired = streak.copyWith(
+      lastVisitDate: addDays(todayStr, -1),
+      isStreakAlive: true,
+    );
+
+    await _mutate((d) {
+      final i = d.streaks.indexWhere((s) => s.id == repaired.id);
+      if (i >= 0) d.streaks[i] = repaired;
+      final ui = d.users.indexWhere((u) => u.id == demoUid);
+      if (ui >= 0) d.users[ui] = d.users[ui].withEmbers(embers - cost);
+    });
+
+    return repaired;
+  }
+
+  @override
+  Future<Voucher> redeemVoucherByCode(String code) async {
+    final data = await _load();
+    final normalized = code.trim().toUpperCase();
+    final voucher = data.vouchers
+        .where((v) => v.code.toUpperCase() == normalized && !v.isRedeemed)
+        .firstOrNull;
 
     if (voucher == null) {
-      throw StateError('Voucher not found.');
-    }
-    if (voucher.isRedeemed) {
-      throw StateError('This voucher has already been redeemed.');
+      throw StateError('No unused voucher with that code.');
     }
 
     final updated = voucher.copyWith(
@@ -334,7 +384,7 @@ class DemoRepository implements EatStreakRepository {
     );
 
     await _mutate((d) {
-      final i = d.vouchers.indexWhere((v) => v.id == voucherId);
+      final i = d.vouchers.indexWhere((v) => v.id == voucher.id);
       if (i >= 0) d.vouchers[i] = updated;
     });
 

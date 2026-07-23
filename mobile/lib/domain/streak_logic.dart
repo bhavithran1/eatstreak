@@ -112,3 +112,52 @@ List<RewardTier> qualifyingTiers(
     return value >= tier.threshold && !alreadyAwardedTierIds.contains(tier.id);
   }).toList();
 }
+
+// ---- embers & streak repair ------------------------------------------------
+//
+// Port of the same section in functions/src/streakLogic.ts — keep in agreement.
+//
+// Breaking a long streak should cost something; that loss is what makes a
+// streak worth keeping. It is paid in embers, earned by visiting, rather than
+// in money: charging a customer for *not* visiting reads as a fine and is the
+// fastest way to make them uninstall. The price rises with the streak, so the
+// customer with the most to lose pays the most to save it, and can afford to
+// because embers come from the visits that built the streak.
+
+const embersPerCheckIn = 1;
+
+/// Once the window lapses, a break stays repairable for this many extra days.
+const repairGraceDays = 2;
+
+/// Below this, a streak is cheaper to rebuild than to repair.
+const minRepairableStreak = 3;
+
+/// What it costs to repair a streak of [streakDays].
+int repairCost(int streakDays) {
+  if (streakDays < minRepairableStreak) return 0;
+  if (streakDays < 7) return 2;
+  if (streakDays < 30) return 5;
+  return 15;
+}
+
+enum RepairEligibility { repairable, notBroken, tooShort, tooLate }
+
+/// Whether a streak may be repaired today. A streak is only "broken" relative
+/// to the shop's window, and the offer expires so a repair can't resurrect a
+/// streak abandoned weeks ago.
+RepairEligibility repairEligibility(
+  int currentStreakDays,
+  String lastVisitDate,
+  String todayStr,
+  int streakWindowDays,
+) {
+  if (lastVisitDate.isEmpty) return RepairEligibility.notBroken;
+
+  final daysSince = daysBetween(lastVisitDate, todayStr);
+  if (daysSince <= streakWindowDays) return RepairEligibility.notBroken;
+  if (currentStreakDays < minRepairableStreak) return RepairEligibility.tooShort;
+  if (daysSince > streakWindowDays + repairGraceDays) {
+    return RepairEligibility.tooLate;
+  }
+  return RepairEligibility.repairable;
+}
