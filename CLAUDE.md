@@ -24,9 +24,16 @@ npm test          # streakLogic + checkInToken + billing suites
 - **Install to the iPhone with `xcrun devicectl`, not `flutter run`** — Flutter's own
   installer fails on this device with a generic Xcode error:
   ```bash
-  cd mobile && flutter build ios --release --dart-define-from-file=env.json
+  cd mobile && flutter build ios --release --dart-define-from-file=env.json --dart-define=APP_CHECK=false
   xcrun devicectl device install app --device 00008140-00167C9E2422201C build/ios/iphoneos/Runner.app
   ```
+  **`APP_CHECK=false` is required on this phone and must never ship.** App Attest needs
+  a real Apple team and free provisioning has none, so activating App Check there starves
+  every Firebase call of a token: Firestore reads hang and then fail `unavailable`, which
+  the app reports as "Network problem". It also used to block the first frame outright.
+  Costs nothing today because enforcement is off — but a TestFlight or App Store build is
+  properly signed, can attest, and must be built **without** this flag. The default is on
+  precisely so that forgetting it fails safe.
   Free provisioning: the build stops launching after 7 days from *install*, and Apple
   sign-in never works on it. Google sign-in does. `devicectl` reporting the device
   `unavailable` means unreachable, not asleep — check `transportType` in

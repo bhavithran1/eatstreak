@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/auth/auth_service.dart';
@@ -102,6 +103,9 @@ class AuthController extends Notifier<AuthState> {
       unawaited(ref.read(analyticsProvider).setUser(uid, role: doc?.role));
       state = AuthState(uid: uid, userDoc: doc, initializing: false);
     } catch (e) {
+      // The screen shows a friendly sentence; this is the raw code behind it,
+      // which is what actually tells you which failure you have.
+      debugPrint('Profile read failed: ${e.runtimeType} / $e');
       // Keep the uid: they are signed in, we just can't read the profile. The
       // router shows a retry rather than sending an existing account through
       // onboarding again.

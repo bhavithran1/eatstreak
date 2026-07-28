@@ -22,8 +22,15 @@ passed.
 
 If all four pass **and** `$ARGUMENTS` contains `device`, put it on the phone:
 
-5. `cd mobile && flutter build ios --release --dart-define-from-file=env.json`
+5. `cd mobile && flutter build ios --release --dart-define-from-file=env.json --dart-define=APP_CHECK=false`
 6. `xcrun devicectl device install app --device 00008140-00167C9E2422201C build/ios/iphoneos/Runner.app`
+
+`APP_CHECK=false` is not optional on this phone, and must not ship. App Attest needs a
+real Apple team; free provisioning has none, so an activated App Check leaves every
+Firebase call waiting for a token that never comes — Firestore reads fail `unavailable`
+and the app shows "Network problem". Build **without** the flag for anything properly
+signed (TestFlight, App Store), where attestation actually works. The default is on so
+that forgetting it fails safe rather than silently shipping an unattested client.
 
 The build (step 5) is the part that proves the change compiles for a real device, and it
 works whether or not the phone is there. **Treat the install as a separate, optional

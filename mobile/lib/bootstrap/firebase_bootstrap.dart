@@ -81,6 +81,10 @@ Future<FirebaseServices> initializeFirebase() async {
 ///
 /// So: a ceiling on the wait, and the caller does not await it at all.
 Future<void> _activateAppCheck() async {
+  if (!Env.appCheckEnabled) {
+    debugPrint('App Check activation skipped (APP_CHECK=false).');
+    return;
+  }
   try {
     await FirebaseAppCheck.instance
         .activate(

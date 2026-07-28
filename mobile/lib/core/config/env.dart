@@ -35,6 +35,18 @@ abstract final class Env {
   /// Must match the region in functions/src/index.ts.
   static const String functionsRegion = 'asia-southeast1';
 
+  /// Whether to activate App Check at startup.
+  ///
+  /// On by default — turning it off is a deliberate act. It exists because
+  /// activation is not free of consequence: once App Check is active the
+  /// Firebase SDKs ask it for a token before each backend call, and a build
+  /// that cannot attest (free provisioning has no Apple team, so App Attest
+  /// cannot issue one) leaves those calls waiting and then failing as
+  /// `unavailable`. With enforcement off, an unattested client is no worse off
+  /// not activating at all.
+  static const bool appCheckEnabled =
+      bool.fromEnvironment('APP_CHECK', defaultValue: true);
+
   // ---- Google Sign-In ------------------------------------------------------
   static const String googleWebClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
   static const String googleIosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
