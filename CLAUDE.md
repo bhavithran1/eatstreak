@@ -91,6 +91,14 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
 - Comments describing a *mechanism* must be updated with the mechanism. A stale comment
   claiming codes expired in 90 seconds is what justified dropping the token through
   sign-in, breaking every first-ever check-in.
+- **Convert a stored streak with `toStreakCore`, never by listing its fields.** Both
+  `checkIn` in `functions/src/index.ts` and `DemoRepository.checkIn` used to rebuild
+  `StreakCore` field by field, and both lists omitted `brokenStreakDays` / `brokenOn` /
+  `brokenStartDate`. `computeCheckIn` carries a break record forward, so the omission fed
+  it a zero and wrote the zero back: a customer who broke a streak, returned, and checked
+  in once more while still inside the grace period lost the repair they were being offered
+  — by doing nothing but visiting the shop. Any new field on a streak is dropped the same
+  way by any field list that outlives it.
 
 ## Deploying (the user runs this, not you)
 
@@ -111,3 +119,11 @@ Console steps that no deploy performs, and that silently no-op until done:
 
 - Anything touching multiple files: settle the approach before editing (`/plan-feature`).
 - Verify with `/ship` before claiming something works. Show the output, don't assert.
+- Anything touching scanning, routing, deep links or `public/c/`: run `/scan-e2e`. It
+  renders real QR codes — EatStreak codes plus the menu, Maps, payment and wifi codes
+  customers actually point the app at — decodes them back, and replays each through a
+  real build on the simulator. Build it with `tool/e2e/env.e2e.json`, never `env.json`:
+  the suite runs on demo data so it never writes a test check-in to `eatstreak-prod`.
+- **Only the hosting emulator runs on this machine.** Firestore and Auth emulators are
+  Java processes and there is no JRE installed, which is why the backend is covered by
+  pure unit tests over `streakLogic.ts` rather than against an emulator.

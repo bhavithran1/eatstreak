@@ -6,3 +6,6 @@
 
 .DS_Store
 node_modules/
+
+# End-to-end scan suite output (regenerated every run).
+tool/e2e/out/

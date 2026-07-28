@@ -130,8 +130,34 @@ ParsedExternalQr parseExternalQr(String data) {
   return ParsedExternalQr(
     type: ExternalQrType.text,
     rawData: trimmed,
-    extractedName: trimmed.isNotEmpty && trimmed.length < 80 ? trimmed : null,
+    extractedName: _isMachinePayload(trimmed) || trimmed.isEmpty || trimmed.length >= 80
+        ? null
+        : trimmed,
   );
+}
+
+/// Structured payloads that are plainly not a name a human would type.
+///
+/// The plain-text branch used to offer any payload under 80 characters as the
+/// detected restaurant name. The QR sitting next to a till is very often the
+/// shop's guest wifi, and `WIFI:S:Cafe_Guest;T:WPA;P:hunter2;;` is 34 — so the
+/// app presented a wifi password as a restaurant name and prefilled it into the
+/// suggestion field, one tap away from writing someone's network credentials
+/// into `shopSuggestions`. A machine payload has no name in it; the customer
+/// can still type the real one.
+bool _isMachinePayload(String data) {
+  const prefixes = [
+    'WIFI:', // wifi join code — carries a password in plaintext
+    'BEGIN:', // vCard / vCalendar
+    'MATMSG:', // email
+    'SMSTO:', // sms
+    'TEL:',
+    'MAILTO:',
+    'BITCOIN:',
+    'OTPAUTH:', // 2FA seed — a secret, and never a shop
+  ];
+  final upper = data.toUpperCase();
+  return prefixes.any(upper.startsWith);
 }
 
 bool _isGoogleMapsUrl(String url) =>

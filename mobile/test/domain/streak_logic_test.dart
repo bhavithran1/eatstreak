@@ -290,4 +290,106 @@ void main() {
       expect(r.brokenStreakDays, 0);
     });
   });
+
+  // Mirrors the "second check-in" block in functions/src/streakLogic.test.ts.
+  //
+  // computeCheckIn carries a break record forward correctly, but the callers on
+  // both sides rebuilt its input by listing fields and left the break record
+  // out — so the round trip through storage zeroed it. The customer was offered
+  // a repair one day and, having done nothing but visit the shop, lost the
+  // offer the next. toStreakCore is what makes the round trip lossless.
+  group('toStreakCore', () {
+    final tomorrow = addDays(today, 1);
+
+    /// A 30-day streak that broke on day -4 and was checked into again today.
+    Streak brokenThenVisited() {
+      final broke = computeCheckIn(
+        StreakCore(
+          currentStreakDays: 30,
+          longestStreakDays: 30,
+          totalVisits: 60,
+          lastVisitDate: addDays(today, -4),
+          streakStartDate: '2026-06-01',
+          isStreakAlive: true,
+        ),
+        today,
+        3,
+      ).streak;
+
+      return Streak(
+        id: 'u_s',
+        userId: 'u',
+        shopId: 's',
+        currentStreakDays: broke.currentStreakDays,
+        longestStreakDays: broke.longestStreakDays,
+        totalVisits: broke.totalVisits,
+        lastVisitDate: broke.lastVisitDate,
+        streakStartDate: broke.streakStartDate,
+        isStreakAlive: broke.isStreakAlive,
+        brokenStreakDays: broke.brokenStreakDays,
+        brokenOn: broke.brokenOn,
+        brokenStartDate: broke.brokenStartDate,
+      );
+    }
+
+    test('carries the break record off a stored streak', () {
+      final core = toStreakCore(brokenThenVisited());
+
+      expect(core.brokenStreakDays, 30);
+      expect(core.brokenOn, addDays(today, -4));
+      expect(core.brokenStartDate, '2026-06-01');
+    });
+
+    test('a second check-in inside the grace period keeps the repair', () {
+      // window 3 + grace 2: broke on today-4, repairable through tomorrow.
+      final next = computeCheckIn(toStreakCore(brokenThenVisited()), tomorrow, 3)
+          .streak;
+
+      expect(next.currentStreakDays, 2, reason: 'the new streak keeps building');
+      expect(next.brokenStreakDays, 30, reason: 'the loss is still on record');
+      expect(next.brokenOn, addDays(today, -4));
+
+      final info = repairInfo(
+        next.currentStreakDays,
+        next.lastVisitDate,
+        next.brokenStreakDays,
+        next.brokenOn,
+        tomorrow,
+        3,
+      );
+      expect(info.eligibility, RepairEligibility.repairable);
+      expect(info.lostStreakDays, 30);
+      expect(info.cost, 15);
+    });
+
+    test('a streak with no break reads as no break, not as a broken one', () {
+      final core = toStreakCore(
+        Streak(
+          id: 'u_s',
+          userId: 'u',
+          shopId: 's',
+          currentStreakDays: 4,
+          longestStreakDays: 4,
+          totalVisits: 4,
+          lastVisitDate: today,
+          streakStartDate: addDays(today, -3),
+          isStreakAlive: true,
+        ),
+      );
+
+      expect(core.brokenStreakDays, 0);
+      expect(core.brokenOn, '');
+      expect(
+        repairInfo(
+          core.currentStreakDays,
+          core.lastVisitDate,
+          core.brokenStreakDays,
+          core.brokenOn,
+          today,
+          3,
+        ).eligibility,
+        RepairEligibility.notBroken,
+      );
+    });
+  });
 }

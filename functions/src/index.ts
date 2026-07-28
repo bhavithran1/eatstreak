@@ -12,6 +12,7 @@ import {
   generateVoucherCode,
   normalizeVoucherCode,
   StreakCore,
+  toStreakCore,
   EMBERS_PER_CHECK_IN,
   repairInfo,
   applyRepair,
@@ -154,16 +155,9 @@ export const checkIn = onCall(async (request: CallableRequest<{ shopId?: string;
   const result = await db.runTransaction(async (tx) => {
     const sSnap = await tx.get(sRef);
     const existing = sSnap.exists ? (sSnap.data() as Streak) : null;
-    const existingCore: StreakCore | null = existing
-      ? {
-          currentStreakDays: existing.currentStreakDays,
-          longestStreakDays: existing.longestStreakDays,
-          totalVisits: existing.totalVisits,
-          lastVisitDate: existing.lastVisitDate,
-          streakStartDate: existing.streakStartDate,
-          isStreakAlive: existing.isStreakAlive,
-        }
-      : null;
+    // toStreakCore, not a hand-written field list: the list is what dropped the
+    // break record and cancelled repairs that were still being offered.
+    const existingCore: StreakCore | null = existing ? toStreakCore(existing) : null;
 
     const { status, streak: nextCore } = computeCheckIn(existingCore, todayStr, shop.streakWindowDays);
 

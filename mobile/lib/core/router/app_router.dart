@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -27,6 +28,7 @@ import '../../features/owner/rewards_screen.dart';
 import '../../state/auth_controller.dart';
 import '../../state/providers.dart';
 import '../theme/app_colors.dart';
+import '../utils/e2e_scan.dart';
 import '../utils/pending_check_in.dart';
 import 'routes.dart';
 
@@ -73,7 +75,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: Routes.scanner,
-                builder: (_, _) => const ScannerScreen(),
+                // `inject` is read only in a debug build: it replays a scanned
+                // payload for the end-to-end harness (tool/e2e/), and a release
+                // build must not accept a scan result from a URL.
+                builder: (_, state) => ScannerScreen(
+                  injectedPayload:
+                      kDebugMode ? state.uri.queryParameters['inject'] : null,
+                ),
               ),
             ],
           ),
@@ -242,6 +250,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (loc == Routes.splash ||
           loc == Routes.signIn ||
           loc == Routes.onboarding) {
+        // The end-to-end harness (tool/e2e/) replays one scanned payload per
+        // launch. Redirecting here rather than listening for the auth
+        // transition, because this is the one bounce a cold start always makes
+        // and it happens after the account is ready — the listener misses the
+        // transition whenever auth resolves before the first frame. Debug-only:
+        // consumeE2eScanPayload() is a compile-time null in release builds, so
+        // this whole branch is tree-shaken away.
+        final injected = await consumeE2eScanPayload();
+        if (injected != null) return Routes.scannerInject(injected);
         return home;
       }
 

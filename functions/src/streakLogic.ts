@@ -26,6 +26,30 @@ export interface StreakCore {
   brokenStartDate?: string;
 }
 
+/**
+ * The mutable core of a stored streak document.
+ *
+ * Callers used to rebuild this by hand from the Firestore doc, and both the
+ * server and demo-mode copies left the three break fields out of that list.
+ * computeCheckIn faithfully carries a break record forward, so the omission
+ * fed it a zero and then wrote the zero back — a customer who broke a streak,
+ * came back, and checked in once more inside the grace period silently lost
+ * the repair they were being offered. One conversion, in one place, tested.
+ */
+export function toStreakCore(doc: StreakCore): StreakCore {
+  return {
+    currentStreakDays: doc.currentStreakDays,
+    longestStreakDays: doc.longestStreakDays,
+    totalVisits: doc.totalVisits,
+    lastVisitDate: doc.lastVisitDate,
+    streakStartDate: doc.streakStartDate,
+    isStreakAlive: doc.isStreakAlive,
+    brokenStreakDays: doc.brokenStreakDays ?? 0,
+    brokenOn: doc.brokenOn ?? '',
+    brokenStartDate: doc.brokenStartDate ?? '',
+  };
+}
+
 export type CheckInStatus = 'success' | 'already_visited_today';
 
 export interface ComputeCheckInResult {

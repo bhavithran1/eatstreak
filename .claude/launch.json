@@ -8,6 +8,19 @@
       "port": 4178
     },
     {
+      "_comment": "The hosted check-in fallback (public/c/) with the /c/** rewrite applied, which a plain static server does not do. Hosting is the one emulator that runs here: Firestore and Auth need a JRE and this machine has none. demo- project prefix keeps it fully offline, with no credentials.",
+      "name": "hosting",
+      "runtimeExecutable": "firebase",
+      "runtimeArgs": [
+        "emulators:start",
+        "--only",
+        "hosting",
+        "--project",
+        "demo-eatstreak"
+      ],
+      "port": 5010
+    },
+    {
       "name": "flutter-web",
       "runtimeExecutable": "flutter",
       "runtimeArgs": [

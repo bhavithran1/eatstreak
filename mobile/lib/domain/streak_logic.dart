@@ -7,6 +7,7 @@ library;
 import '../core/utils/dates.dart';
 import '../data/models/enums.dart';
 import '../data/models/reward_tier.dart';
+import '../data/models/streak.dart';
 
 /// The mutable core of a streak, without identity/denormalized fields.
 class StreakCore {
@@ -35,6 +36,25 @@ class StreakCore {
   final String brokenOn;
   final String brokenStartDate;
 }
+
+/// The mutable core of a stored streak.
+///
+/// Mirrors `toStreakCore` in functions/src/streakLogic.ts. Callers used to
+/// rebuild this by hand, and both the server and this copy left the three break
+/// fields out of that list — so [computeCheckIn] was fed a zeroed break record
+/// and wrote the zero back, cancelling a repair that was still being offered.
+/// One conversion, in one place, so there is no field list left to forget.
+StreakCore toStreakCore(Streak doc) => StreakCore(
+      currentStreakDays: doc.currentStreakDays,
+      longestStreakDays: doc.longestStreakDays,
+      totalVisits: doc.totalVisits,
+      lastVisitDate: doc.lastVisitDate,
+      streakStartDate: doc.streakStartDate,
+      isStreakAlive: doc.isStreakAlive,
+      brokenStreakDays: doc.brokenStreakDays,
+      brokenOn: doc.brokenOn,
+      brokenStartDate: doc.brokenStartDate,
+    );
 
 class ComputeCheckInResult {
   const ComputeCheckInResult({required this.status, required this.streak});

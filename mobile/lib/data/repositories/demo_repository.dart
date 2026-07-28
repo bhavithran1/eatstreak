@@ -231,20 +231,14 @@ class DemoRepository implements EatStreakRepository {
         data.streaks.where((s) => s.userId == demoUid && s.shopId == shopId).firstOrNull;
 
     final computed = computeCheckIn(
-      existing == null
-          ? null
-          : StreakCore(
-              currentStreakDays: existing.currentStreakDays,
-              longestStreakDays: existing.longestStreakDays,
-              totalVisits: existing.totalVisits,
-              lastVisitDate: existing.lastVisitDate,
-              streakStartDate: existing.streakStartDate,
-              isStreakAlive: existing.isStreakAlive,
-            ),
+      existing == null ? null : toStreakCore(existing),
       todayStr,
       shop.streakWindowDays,
     );
 
+    // Every field computeCheckIn produced, including the break record — the
+    // streak that just reset has to carry what it lost, or the repair offer
+    // vanishes the moment the customer visits again.
     final next = Streak(
       id: '${demoUid}_$shopId',
       userId: demoUid,
@@ -257,6 +251,9 @@ class DemoRepository implements EatStreakRepository {
       lastVisitDate: computed.streak.lastVisitDate,
       streakStartDate: computed.streak.streakStartDate,
       isStreakAlive: computed.streak.isStreakAlive,
+      brokenStreakDays: computed.streak.brokenStreakDays,
+      brokenOn: computed.streak.brokenOn,
+      brokenStartDate: computed.streak.brokenStartDate,
     );
 
     if (computed.status == CheckInStatus.alreadyVisitedToday) {

@@ -27,6 +27,13 @@ abstract final class Routes {
   static const editShop = '/edit-shop';
   static const verifyVoucher = '/verify-voucher';
 
+  /// Debug-only: open the scanner as though [raw] had just come off the camera.
+  /// Reached from `eatstreak://scan?data=<raw>`, which is how the end-to-end
+  /// harness drives a scan on a simulator that has no camera. Release builds
+  /// ignore the parameter entirely — see app_router.dart.
+  static String scannerInject(String raw) =>
+      '$scanner?inject=${Uri.encodeComponent(raw)}';
+
   /// Deep link target: `eatstreak://check-in/<shopId>` and `https://<host>/c/<id>`.
   static const checkIn = '/check-in/:shopId';
   static String checkInFor(String shopId, {String? token}) {

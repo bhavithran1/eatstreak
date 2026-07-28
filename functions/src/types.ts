@@ -50,6 +50,13 @@ export interface Streak {
   lastVisitDate: string;
   streakStartDate: string;
   isStreakAlive: boolean;
+  // What the last break cost. Written by checkIn when a streak resets and read
+  // by repairInfo, so a customer who visits again before repairing hasn't
+  // destroyed the evidence of what they lost. Optional because documents
+  // written before the field existed don't carry it.
+  brokenStreakDays?: number;
+  brokenOn?: string;
+  brokenStartDate?: string;
   shopOwnerId: string; // denormalized
   userName: string; // denormalized
 }

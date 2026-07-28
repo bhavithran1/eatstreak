@@ -34,7 +34,19 @@ const _canSimulateScan = kDebugMode && Env.demoMode;
 /// The camera check-in. Also the app's only write path for customers, so every
 /// failure mode here has to say something useful rather than just stalling.
 class ScannerScreen extends ConsumerStatefulWidget {
-  const ScannerScreen({super.key});
+  const ScannerScreen({super.key, this.injectedPayload});
+
+  /// A scanned payload supplied by the end-to-end harness instead of by the
+  /// camera (see tool/e2e/). The iOS Simulator has no camera, so without this
+  /// the entire external-QR branch — a customer pointing the app at a menu or
+  /// payment code, which is the most common wrong scan there is — could only
+  /// ever be tested on physical hardware.
+  ///
+  /// It joins the flow at [_ScannerScreenState._route], the same seam
+  /// [_onDetect] hands the camera's string to, so what runs is the real
+  /// resolution logic and not a test-only copy of it. The router only ever
+  /// populates this in a debug build.
+  final String? injectedPayload;
 
   @override
   ConsumerState<ScannerScreen> createState() => _ScannerScreenState();
@@ -55,7 +67,28 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
   @override
   void initState() {
     super.initState();
-    _checkCamera();
+
+    final injected = widget.injectedPayload;
+    if (injected == null) {
+      _checkCamera();
+      return;
+    }
+
+    // A replayed payload needs no camera, so don't ask for one. Beyond being
+    // pointless, the permission dialog is modal: it covers whatever the replay
+    // actually did, and every screenshot the harness takes comes back as a
+    // prompt instead of a result. `simctl privacy` cannot grant camera and
+    // editing the simulator's TCC database does not stick — not asking is the
+    // only thing that works.
+    _cameraAvailable = false;
+
+    // After the first frame, because _route navigates and needs a mounted
+    // context.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _handling) return;
+      setState(() => _handling = true);
+      unawaited(_route(injected));
+    });
   }
 
   Future<void> _checkCamera() async {

@@ -5,6 +5,7 @@
 
 import {
   computeCheckIn, qualifyingTiers, StreakCore, repairCost, repairInfo, applyRepair,
+  toStreakCore,
   generateVoucherCode, normalizeVoucherCode, VOUCHER_CODE_LENGTH, VOUCHER_CODE_PREFIX,
 } from './streakLogic';
 import { toDateStringInTZ, addDays } from './dates';
@@ -199,6 +200,47 @@ const tiers: RewardTier[] = [
     { ...bigStreak, lastVisitDate: addDays(TODAY, -9) }, TODAY, 3).streak;
   eq('post-visit: an old break is still too late',
     repairInfo(staleBreak, TODAY, 3).eligibility, 'too_late');
+
+  // A SECOND check-in, still inside the grace period, must not erase the break.
+  //
+  // This is the shape of a real regression: computeCheckIn carries the record
+  // forward correctly, but checkIn() in index.ts rebuilt its input by listing
+  // fields and left these three out, so the round trip through Firestore zeroed
+  // them. The customer was shown a repair offer one day and, having done
+  // nothing but visit the shop, lost it the next. Going through toStreakCore is
+  // what makes the round trip lossless, so the test does the round trip.
+  //
+  // window 3 + grace 2: broke on TODAY-4, back on TODAY, repairable until
+  // TODAY+1. The second check-in happens on that last eligible day.
+  const TOMORROW = addDays(TODAY, 1);
+  const storedAfterBreak = toStreakCore(afterVisit);
+  eq('round trip: break record survives toStreakCore',
+    storedAfterBreak.brokenStreakDays, 30);
+
+  const secondVisit = computeCheckIn(storedAfterBreak, TOMORROW, 3).streak;
+  eq('second check-in: the streak keeps building', secondVisit.currentStreakDays, 2);
+  eq('second check-in: the break record survives', secondVisit.brokenStreakDays, 30);
+  eq('second check-in: and the date it broke on', secondVisit.brokenOn, addDays(TODAY, -4));
+  eq('second check-in: the repair is still on offer',
+    repairInfo(toStreakCore(secondVisit), TOMORROW, 3).eligibility, 'repairable');
+  eq('second check-in: still priced on what was lost',
+    repairInfo(toStreakCore(secondVisit), TOMORROW, 3).cost, 15);
+
+  // And repairing after those two visits folds both onto the lost run.
+  const mended = applyRepair(secondVisit, TOMORROW);
+  eq('repair after two visits: 30 lost + 2 rebuilt', mended.currentStreakDays, 32);
+  eq('repair after two visits: record cleared', mended.brokenStreakDays, 0);
+
+  // A doc written before the break fields existed reads as "no break on record"
+  // rather than throwing or inventing one.
+  const legacy = toStreakCore({
+    currentStreakDays: 4, longestStreakDays: 4, totalVisits: 4,
+    lastVisitDate: TODAY, streakStartDate: addDays(TODAY, -3), isStreakAlive: true,
+  });
+  eq('legacy doc: no break record', legacy.brokenStreakDays, 0);
+  eq('legacy doc: no break date', legacy.brokenOn, '');
+  eq('legacy doc: reads as not broken',
+    repairInfo(legacy, TODAY, 3).eligibility, 'not_broken');
 
   // A repair restores the streak without counting as a visit.
   const core = {
