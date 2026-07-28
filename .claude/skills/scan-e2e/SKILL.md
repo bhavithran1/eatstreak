@@ -21,6 +21,14 @@ cd /Users/zalkky/Coding/eatstreak && python3 tool/e2e/run_scan_suite.py --udid <
 
 `--only <fixture>` reruns a single case while iterating on a fix.
 
+**Check-in fixtures only demonstrate a real check-in on a freshly seeded
+device.** They share one device and run in order, so once the first EatStreak
+code has checked in, every later run finds that shop already visited today and
+shows `already_visited_today` instead — correct behaviour, and easy to misread
+as the check-in having broken. `--reset` clears the demo world so the next run
+starts clean; it also clears the account, so onboard once afterwards (tap
+"Explore the demo", Skip, type a name, Continue as Customer).
+
 ## What it proves, and what it does not
 
 The QR images are real. Each is encoded with OpenCV and then read back with
@@ -68,13 +76,11 @@ reads and clears it, and the router redirect sends the app to the scanner.
 
 Three mechanisms were tried. The two obvious ones do not work on iOS:
 
-- **A deep link** (`eatstreak://scan?data=…`) **terminates the app.** The bundled
-  FirebaseAuth plugin implements `scene:openURLContexts:` and calls `Auth.auth()`,
-  which hard-asserts when no default FirebaseApp has been configured. Demo mode
-  never configures one, so *any* URL opened into the app kills it before Dart
-  runs. Stack:
-  `FLTFirebaseAuthPlugin scene:openURLContexts: → static Auth.auth() → _assertionFailure`.
-  This is a real bug, not a test artifact — see below.
+- **A deep link** (`eatstreak://scan?data=…`) **does not arrive in demo mode.**
+  It used to kill the app outright; `SceneDelegate` now holds URLs back until a
+  default FirebaseApp exists and discards them after 5s rather than forwarding
+  into the trap. A demo build never configures Firebase, so its URLs always hit
+  that timeout. Survivable, but not a delivery mechanism — see below.
 - **A `SIMCTL_CHILD_…` environment variable** never arrives: Dart's
   `Platform.environment` comes back empty in an iOS Flutter build. Measured, not
   assumed — a probe reported `envcount=0`.
@@ -83,16 +89,38 @@ Three mechanisms were tried. The two obvious ones do not work on iOS:
   Read it back from `$(xcrun simctl get_app_container … data)/Library/Preferences/`
   before believing it.
 
-## Known real bug this surfaced
+## The crash this surfaced, and what was done about it
 
-**A demo-mode build dies on any incoming URL** (stack above). It also threatens
-production: the app's whole premise is scanning a code that cold-starts it from
-a link, and if the scene delivers that URL before `main()` finishes
-`Firebase.initializeApp`, the same assert fires. Not yet fixed — fixing it means
-deciding between shipping a `GoogleService-Info.plist` and configuring Firebase
-natively in `AppDelegate`, which cuts against the "config comes from
---dart-define, no checked-in google-services files" decision in
-`firebase_bootstrap.dart`. Raise it before changing it.
+Any URL opened into the app used to terminate it:
+`FLTFirebaseAuthPlugin scene:openURLContexts: → Auth.auth() → _assertionFailure`.
+The plugin calls `Auth.auth()` on the way in, and that traps when no default
+FirebaseApp has been configured. Fatal in every demo build, and a live risk on
+the app's primary flow — scan a code, app cold-starts from the link — because
+nothing orders UIKit's URL delivery against Dart's `Firebase.initializeApp`.
+
+Fixed in `ios/Runner/SceneDelegate.swift`: URLs are held until a default app
+exists, then forwarded; discarded with a log line after 5s if one never appears.
+Deferring rather than dropping is the point — a real cold-start check-in link
+survives the wait instead of dying with the process.
+
+**Demo builds never configure Firebase, so their URLs always time out.** Deep
+links do not function in demo mode. That is why this harness injects through
+preferences and not through a link, and it is a genuine gap: the deep-link path
+is covered by `parseCheckInTarget` unit tests and by a live-mode build, never by
+this suite.
+
+Both halves are worth re-checking after any change to Firebase startup or the
+iOS lifecycle:
+
+```bash
+xcrun simctl openurl booted "eatstreak://check-in/shop_ramen?t=abc123"
+```
+
+Demo build: the app stays alive and logs `[EatStreak] Dropped 1 URL delivery`.
+Live build: no such log, and
+`$(xcrun simctl get_app_container booted com.eatstreak.app data)/Library/Preferences/com.eatstreak.app.plist`
+gains `flutter.eatstreak.pendingCheckIn` with the shop and token — which is the
+proof the URL reached Dart rather than merely failing to crash.
 
 ## The hosted fallback page
 

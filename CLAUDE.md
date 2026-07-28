@@ -62,6 +62,14 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
 - **A broken streak is repaired with embers, not money.** Cost scales with the streak
   that broke (`repairCost`), inside `REPAIR_GRACE_DAYS`, minimum `MIN_REPAIRABLE_STREAK`.
   The server decides eligibility and price; the client only offers the button.
+- **Incoming URLs wait for Firebase.** `ios/Runner/SceneDelegate.swift` holds URL
+  deliveries until a default `FirebaseApp` exists. `FLTFirebaseAuthPlugin` handles
+  `scene:openURLContexts:` and calls `Auth.auth()`, which *traps* rather than fails
+  when nothing is configured — so forwarding early killed the process, on the app's
+  primary flow (scan a code, cold-start from the link). Two consequences: don't
+  "simplify" that delegate back to an empty subclass, and **deep links do not work in
+  demo mode**, because a demo build never configures Firebase and those URLs always
+  hit the 5s timeout. That is a known gap, not a routing bug.
 - **Analytics goes through `Analytics`, never `FirebaseAnalytics.instance`.** The
   interface in `core/analytics/analytics.dart` imports no `firebase_*` package on purpose,
   because `state/providers.dart` depends on it and a demo build must not link the SDK —

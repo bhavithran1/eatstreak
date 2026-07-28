@@ -94,6 +94,30 @@ def assert_signed_in(udid: str) -> None:
         )
 
 
+def reset_demo_world(udid: str) -> None:
+    """Clear the seeded demo data so check-in fixtures start from a known state.
+
+    Fixtures share one device and run in order, so the first EatStreak code
+    checks in and every later run of the suite finds that shop already visited
+    today — correct behaviour, but it means a repeated run stops demonstrating a
+    real check-in and quietly shows `already_visited_today` instead.
+
+    Dropping the store also drops the demo user document, and the app treats a
+    missing user as not-yet-onboarded (see buildDemoSeed's `includeDemoUser`),
+    so onboarding has to be walked through once afterwards. That is why this is
+    opt-in rather than automatic.
+    """
+    plist = container(udid) / "Library/Preferences" / f"{BUNDLE_ID}.plist"
+    if not plist.exists():
+        return
+    sh("xcrun", "simctl", "terminate", udid, BUNDLE_ID, check=False)
+    data = plistlib.loads(plist.read_bytes())
+    for key in ("flutter.eatstreak.demo.v1", "flutter.eatstreak.demo.session"):
+        data.pop(key, None)
+    plist.write_bytes(plistlib.dumps(data))
+    sh("xcrun", "simctl", "spawn", udid, "killall", "-9", "cfprefsd", check=False)
+
+
 def inject(udid: str, payload: str) -> None:
     """Leave the payload where the app will find it on the way up.
 
@@ -140,6 +164,11 @@ def main() -> int:
     ap.add_argument("--udid", required=True)
     ap.add_argument("--out", type=pathlib.Path, default=HERE / "out")
     ap.add_argument("--only", help="run just this fixture name")
+    ap.add_argument(
+        "--reset", action="store_true",
+        help="wipe the demo world first, so check-in fixtures start from a fresh "
+             "seed (you will have to onboard once more afterwards)",
+    )
     # Long enough for a cold start plus routing. Note that a *toast* has usually
     # faded by the time the shot is taken, so an `already_visited_today` fixture
     # looks like a bare scanner screen — that is the expected picture, not a
@@ -149,6 +178,13 @@ def main() -> int:
     args = ap.parse_args()
 
     assert_single_bundle(args.udid)
+
+    if args.reset:
+        reset_demo_world(args.udid)
+        print("Demo world cleared. Launch the app, tap 'Explore the demo' and "
+              "onboard as a Customer, then run again.\n")
+        return 0
+
     assert_signed_in(args.udid)
 
     # Pre-grant the camera. ScannerScreen asks for it on open, and the system

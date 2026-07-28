@@ -150,7 +150,7 @@ class _ScannerScreenState extends ConsumerState<ScannerScreen> {
         rawData: raw,
       );
     } catch (e) {
-      if (mounted) {
+        if (mounted) {
         AppToast.show(context, friendlyErrorMessage(e), type: ToastType.error);
       }
       _rearm();
