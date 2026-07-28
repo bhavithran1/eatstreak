@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -35,8 +37,15 @@ Future<FirebaseServices> initializeFirebase() async {
     );
   }
 
-  await Firebase.initializeApp(options: _optionsForPlatform());
-  await _activateAppCheck();
+  // Local and fast, but bounded anyway: everything below depends on it, and a
+  // startup step with no ceiling is indistinguishable from a frozen app.
+  await Firebase.initializeApp(options: _optionsForPlatform())
+      .timeout(const Duration(seconds: 20));
+
+  // Deliberately not awaited. Attestation is best-effort and the app works
+  // without it while enforcement is off, so it must never sit between the user
+  // and the first frame — see _activateAppCheck.
+  unawaited(_activateAppCheck());
 
   return FirebaseServices(
     auth: await FirebaseAuthService.create(),
@@ -56,26 +65,43 @@ Future<FirebaseServices> initializeFirebase() async {
 /// here only makes the app start sending tokens — turn enforcement on in the
 /// Firebase console once you can see those tokens arriving, or you lock out
 /// every build that is already installed, including your own.
+///
+/// Never fatal, and never blocking. A device that can't attest (jailbroken, no
+/// Play Services, free provisioning) must still reach the sign-in screen. The
+/// `catch` below was meant to guarantee that and only half did: it covers
+/// activation *failing*, not activation *never returning*.
+///
+/// That gap was the bug. A release build uses the App Attest provider, App
+/// Attest needs a real Apple team, and a free-provisioning build does not have
+/// one — so on the developer's own phone `activate()` sat there instead of
+/// throwing. `initializeFirebase` awaited it, `main` awaited that, and `runApp`
+/// was never reached: no first frame, no error, no spinner of ours, just the
+/// launch screen forever. Exactly the "blank launch" this comment already
+/// promised would not happen.
+///
+/// So: a ceiling on the wait, and the caller does not await it at all.
 Future<void> _activateAppCheck() async {
   try {
-    await FirebaseAppCheck.instance.activate(
-      // App Attest needs a real Apple team; debug builds use a local token you
-      // register once in the console.
-      // DeviceCheck fallback covers devices where App Attest isn't available,
-      // so attestation degrades instead of failing outright.
-      providerApple: kDebugMode
-          ? const AppleDebugProvider()
-          : const AppleAppAttestWithDeviceCheckFallbackProvider(),
-      providerAndroid: kDebugMode
-          ? const AndroidDebugProvider()
-          : const AndroidPlayIntegrityProvider(),
-    );
+    await FirebaseAppCheck.instance
+        .activate(
+          // App Attest needs a real Apple team; debug builds use a local token
+          // you register once in the console.
+          // DeviceCheck fallback covers devices where App Attest isn't
+          // available, so attestation degrades instead of failing outright.
+          providerApple: kDebugMode
+              ? const AppleDebugProvider()
+              : const AppleAppAttestWithDeviceCheckFallbackProvider(),
+          providerAndroid: kDebugMode
+              ? const AndroidDebugProvider()
+              : const AndroidPlayIntegrityProvider(),
+        )
+        .timeout(const Duration(seconds: 10));
   } catch (e) {
-    // Never fatal. A device that can't attest (jailbroken, no Play Services,
-    // free provisioning) should still reach the sign-in screen; with
-    // enforcement off it works normally, and with enforcement on it fails at
-    // the call with a clear error rather than a blank launch.
-    debugPrint('App Check activation failed: $e');
+    // With enforcement off — which is the documented state until tokens are
+    // visibly arriving — an unattested client still works normally. With it on,
+    // calls fail at the call site with a clear error, which is a far better
+    // failure than a launch that never completes.
+    debugPrint('App Check activation failed or timed out: $e');
   }
 }
 

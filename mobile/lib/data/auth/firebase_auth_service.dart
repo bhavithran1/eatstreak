@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -15,11 +16,23 @@ class FirebaseAuthService implements AuthService {
 
   /// Initializes the Google Sign-In SDK before returning, which v7 requires
   /// before any authenticate() call.
+  ///
+  /// Bounded and non-fatal: this runs before the first frame, so a stall here
+  /// is a launch that never finishes. A user who is already signed in does not
+  /// need the Google SDK at all, and one who isn't gets a clear error from the
+  /// button rather than an app that never starts.
   static Future<FirebaseAuthService> create() async {
-    await GoogleSignIn.instance.initialize(
-      clientId: Env.googleIosClientId.isEmpty ? null : Env.googleIosClientId,
-      serverClientId: Env.googleWebClientId.isEmpty ? null : Env.googleWebClientId,
-    );
+    try {
+      await GoogleSignIn.instance
+          .initialize(
+            clientId: Env.googleIosClientId.isEmpty ? null : Env.googleIosClientId,
+            serverClientId:
+                Env.googleWebClientId.isEmpty ? null : Env.googleWebClientId,
+          )
+          .timeout(const Duration(seconds: 10));
+    } catch (e) {
+      debugPrint('Google Sign-In initialize failed or timed out: $e');
+    }
     return FirebaseAuthService._(FirebaseAuth.instance);
   }
 

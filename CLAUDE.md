@@ -93,6 +93,15 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
   noticed for months, because "keep these in sync" was a comment rather than an assertion.
 - Screens talk only to `EatStreakRepository`. Adding a data method means implementing it
   in **both** `DemoRepository` and `FirestoreRepository`.
+- **Nothing best-effort may be awaited before `runApp`.** `main()` awaits
+  `initializeFirebase()`, so every await inside it runs before the first frame — and
+  anything that stalls there produces a launch screen that never goes away, with no
+  error and not even our own spinner. App Check activation did exactly that: a release
+  build uses the App Attest provider, App Attest needs a real Apple team, and a
+  free-provisioning build has none, so `activate()` sat there rather than throwing. Its
+  `catch` only ever covered failing, not hanging. It is now unawaited *and* capped, as
+  are `Firebase.initializeApp` and the Google Sign-In SDK init, and `main` renders an
+  error screen instead of returning without calling `runApp`.
 - **Every path out of `_onUidChanged` must clear `initializing`.** The state update
   used to sit after an unguarded `await _repo.getUser(uid)`, so any throw or stall —
   App Check enforcement, a denied rule, a dead network — left the flag true and the
