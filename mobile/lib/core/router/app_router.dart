@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,8 +29,11 @@ import '../../features/owner/verify_voucher_screen.dart';
 import '../../features/owner/rewards_screen.dart';
 import '../../state/auth_controller.dart';
 import '../../state/providers.dart';
+import '../../features/shared/widgets/gradient_button.dart';
 import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import '../utils/e2e_scan.dart';
+import '../utils/errors.dart';
 import '../utils/pending_check_in.dart';
 import 'routes.dart';
 
@@ -230,6 +235,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         return loc == Routes.splash ? null : Routes.splash;
       }
 
+      // Signed in, but the profile could not be read. Stay on the splash, which
+      // renders the failure and a retry. Falling through would treat "couldn't
+      // load" as "not onboarded" and walk an existing account back through
+      // onboarding — the same mistake as rendering a failed load as an empty
+      // state.
+      if (s.profileError != null) {
+        return loc == Routes.splash ? null : Routes.splash;
+      }
+
       // A check-in link opened while signed out survives the sign-in round trip
       // and onboarding — including process death — and is resumed by
       // PendingCheckInResumer once the user can actually act on it.
@@ -274,12 +288,62 @@ CustomerStatus? _customerStatus(String? wire) => switch (wire) {
       _ => null,
     };
 
-class _SplashScreen extends StatelessWidget {
+/// The pre-auth holding screen: a spinner while the session resolves, and the
+/// failure plus a retry when the profile cannot be read. The second half exists
+/// because this screen used to spin forever on any backend failure.
+class _SplashScreen extends ConsumerWidget {
   const _SplashScreen();
 
   @override
-  Widget build(BuildContext context) => const Scaffold(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authControllerProvider);
+    if (auth.profileError == null) {
+      return const Scaffold(
         backgroundColor: AppColors.bg,
         body: Center(child: CircularProgressIndicator()),
       );
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_outlined, size: 44, color: AppColors.muted),
+              const SizedBox(height: 16),
+              Text(
+                "Couldn't load your account",
+                textAlign: TextAlign.center,
+                style: AppText.heading(size: 19),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                friendlyErrorMessage(auth.profileError!),
+                textAlign: TextAlign.center,
+                style: AppText.body(size: 14, height: 1.45),
+              ),
+              const SizedBox(height: 24),
+              GradientButton(
+                label: 'Try again',
+                icon: Icons.refresh,
+                onPressed: () => unawaited(
+                  ref.read(authControllerProvider.notifier).retryProfileLoad(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => unawaited(
+                  ref.read(authControllerProvider.notifier).signOut(),
+                ),
+                child: Text('Sign out', style: AppText.body(size: 14)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

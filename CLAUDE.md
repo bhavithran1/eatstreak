@@ -93,6 +93,13 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
   noticed for months, because "keep these in sync" was a comment rather than an assertion.
 - Screens talk only to `EatStreakRepository`. Adding a data method means implementing it
   in **both** `DemoRepository` and `FirestoreRepository`.
+- **Every path out of `_onUidChanged` must clear `initializing`.** The state update
+  used to sit after an unguarded `await _repo.getUser(uid)`, so any throw or stall —
+  App Check enforcement, a denied rule, a dead network — left the flag true and the
+  router pinned the app to the splash spinner forever, with no error and no retry.
+  A failed read is now its own state (`profileError`), deliberately *not* folded into
+  "no profile": that reads as "not onboarded" and walks an existing account back
+  through onboarding. Tested in `test/state/auth_controller_test.dart`.
 - **Screens read the store through `StoreScope`**, never `store.value ?? StoreState()` —
   that pattern renders "loading" and "failed" as "you have no shop", which is how owners
   ended up being told to register a shop they already had.
