@@ -13,6 +13,7 @@ class EmptyState extends StatelessWidget {
     this.icon = Icons.auto_awesome_outlined,
     required this.title,
     required this.subtitle,
+    this.detail,
     this.actionLabel,
     this.onAction,
   });
@@ -20,6 +21,11 @@ class EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
+
+  /// Optional technical line under [subtitle] — an error code, not prose. Set
+  /// only on failure states, where knowing *which* failure it is matters more
+  /// than the sentence above it.
+  final String? detail;
   final String? actionLabel;
   final VoidCallback? onAction;
 
@@ -56,6 +62,14 @@ class EmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
             style: AppText.body(size: 14, height: 1.45),
           ),
+          if (detail != null) ...[
+            const SizedBox(height: Spacing.xs),
+            Text(
+              detail!,
+              textAlign: TextAlign.center,
+              style: AppText.body(size: 12, color: AppColors.muted2),
+            ),
+          ],
           if (actionLabel != null && onAction != null) ...[
             const SizedBox(height: Spacing.lg),
             GradientButton(

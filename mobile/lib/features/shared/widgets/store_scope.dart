@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/errors.dart';
 import '../../../state/store_controller.dart';
 import 'empty_state.dart';
 
@@ -23,11 +24,18 @@ class StoreScope extends ConsumerWidget {
           loading: () => const _Frame(
             child: CircularProgressIndicator(color: AppColors.primary),
           ),
-          error: (_, _) => _Frame(
+          error: (error, _) => _Frame(
             child: EmptyState(
               icon: Icons.cloud_off_outlined,
               title: "Couldn't load your data",
-              subtitle: 'Check your connection and try again.',
+              // The error used to be discarded here and every failure reported
+              // as "check your connection", so a denied rule, a missing index
+              // and a document the app can't parse all read as bad wifi — and
+              // sent the user off to fix their network instead. [detail] is the
+              // code behind the sentence, which on a phone whose logs we cannot
+              // read is the only place it is ever visible.
+              subtitle: friendlyErrorMessage(error),
+              detail: _detailOf(error),
               actionLabel: 'Retry',
               onAction: () =>
                   ref.read(storeControllerProvider.notifier).refresh(),
@@ -37,6 +45,12 @@ class StoreScope extends ConsumerWidget {
         );
   }
 }
+
+/// The short technical line under the friendly sentence: which read failed and
+/// what it failed with, e.g. `visits · permission-denied`.
+String _detailOf(Object error) => error is StoreLoadException
+    ? '${error.step} · ${error.code}'
+    : errorCode(error);
 
 class _Frame extends StatelessWidget {
   const _Frame({required this.child});

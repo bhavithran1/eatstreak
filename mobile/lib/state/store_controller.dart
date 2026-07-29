@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/analytics/analytics.dart';
@@ -79,6 +80,48 @@ class StoreState {
 /// for exactly the shops doing best.
 String get _visitWindowStart => dateNDaysAgo(29);
 
+/// Which of the store's reads failed, wrapped around the failure itself.
+///
+/// [_loadScoped] issues four reads against four collections with four different
+/// rule blocks and index requirements. Bare, they all surface as one
+/// indistinguishable "couldn't load your data", which is a dead end on a device
+/// whose logs we cannot read — the first question is always *which read*, and
+/// nothing on screen answered it.
+class StoreLoadException implements Exception {
+  StoreLoadException(this.step, this.cause);
+
+  /// The collection being read: 'shops', 'streaks', 'vouchers' or 'visits'.
+  final String step;
+  final Object cause;
+
+  /// The Firebase error code behind the failure, when there is one —
+  /// `permission-denied`, `failed-precondition`, `unavailable` — otherwise the
+  /// exception's type, which is what a bad document parse leaves behind.
+  String get code {
+    try {
+      final dynamic dyn = cause;
+      final value = dyn.code;
+      if (value is String && value.isNotEmpty) return value;
+    } on NoSuchMethodError {
+      // Not a coded exception; the runtime type is the useful part.
+    }
+    return cause.runtimeType.toString();
+  }
+
+  @override
+  String toString() => 'StoreLoadException($step: $code) $cause';
+}
+
+/// Runs one of the store's reads, tagging any failure with what it was reading.
+Future<T> _step<T>(String step, Future<T> read) async {
+  try {
+    return await read;
+  } catch (e, s) {
+    debugPrint('Store load failed on $step: ${e.runtimeType} / $e\n$s');
+    throw StoreLoadException(step, e);
+  }
+}
+
 class StoreController extends AsyncNotifier<StoreState> {
   EatStreakRepository get _repo => ref.read(repositoryProvider);
 
@@ -98,18 +141,27 @@ class StoreController extends AsyncNotifier<StoreState> {
   /// Read the collections this user may see. Owners query by shopOwnerId,
   /// customers by userId — the split mirrors the Firestore security rules.
   Future<StoreState> _loadScoped(String uid, UserRole role, AppUser? userDoc) async {
-    final shops = await _repo.getShops();
+    final shops = await _step('shops', _repo.getShops());
 
     final results = await Future.wait([
-      role == UserRole.owner
-          ? _repo.getStreaksForOwner(uid)
-          : _repo.getStreaksForUser(uid),
-      role == UserRole.owner
-          ? _repo.getVouchersForOwner(uid)
-          : _repo.getVouchersForUser(uid),
-      role == UserRole.owner
-          ? _repo.getVisitsForOwner(uid, since: _visitWindowStart)
-          : _repo.getVisitsForUser(uid, since: _visitWindowStart),
+      _step(
+        'streaks',
+        role == UserRole.owner
+            ? _repo.getStreaksForOwner(uid)
+            : _repo.getStreaksForUser(uid),
+      ),
+      _step(
+        'vouchers',
+        role == UserRole.owner
+            ? _repo.getVouchersForOwner(uid)
+            : _repo.getVouchersForUser(uid),
+      ),
+      _step(
+        'visits',
+        role == UserRole.owner
+            ? _repo.getVisitsForOwner(uid, since: _visitWindowStart)
+            : _repo.getVisitsForUser(uid, since: _visitWindowStart),
+      ),
     ]);
 
     return StoreState(
@@ -305,5 +357,36 @@ class StoreController extends AsyncNotifier<StoreState> {
   Future<void> resetAll() => ref.read(authControllerProvider.notifier).signOut();
 }
 
+/// Codes worth trying again. Everything else is a decision the backend has
+/// already made and will make identically next time.
+const _transientCodes = {
+  'unavailable',
+  'deadline-exceeded',
+  'network-request-failed',
+  'internal',
+};
+
+/// Retries before the failure is shown, and the delay before each.
+const maxStoreLoadRetries = 2;
+const storeLoadRetryDelay = Duration(milliseconds: 300);
+
+/// When to retry a failed store load, replacing Riverpod's default policy.
+///
+/// The default retries *any* non-`Error` — which is every `FirebaseException` —
+/// ten times with exponential backoff, up to 6.4s apart. A permission-denied or
+/// a missing index will never succeed on the eleventh attempt any more than the
+/// first, so the whole ~38 seconds is spent showing a spinner indistinguishable
+/// from the launch hangs this app has twice been stuck behind, and only then the
+/// error. Transient codes are still worth a second look; the rest fail fast so
+/// the screen can say what happened while the user is still watching.
+Duration? retryStoreLoad(int retryCount, Object error) {
+  if (retryCount >= maxStoreLoadRetries) return null;
+  final code = error is StoreLoadException ? error.code : '';
+  return _transientCodes.contains(code) ? storeLoadRetryDelay : null;
+}
+
 final storeControllerProvider =
-    AsyncNotifierProvider<StoreController, StoreState>(StoreController.new);
+    AsyncNotifierProvider<StoreController, StoreState>(
+  StoreController.new,
+  retry: retryStoreLoad,
+);

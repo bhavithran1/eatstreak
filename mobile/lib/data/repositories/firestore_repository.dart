@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../core/config/env.dart';
 import '../models/check_in_token.dart';
@@ -10,6 +11,24 @@ import '../models/visit.dart';
 import '../models/visit_result.dart';
 import '../models/voucher.dart';
 import 'eatstreak_repository.dart';
+
+/// A document the app could not turn into a model, named.
+///
+/// Carries a `code` for the same reason `FirebaseException` does: it is what
+/// the failure states put on screen, and "which document" is the whole of the
+/// diagnosis for this one.
+class DocumentParseException implements Exception {
+  DocumentParseException(this.path, this.cause);
+
+  /// Full Firestore path, e.g. `shops/abc123`.
+  final String path;
+  final Object cause;
+
+  String get code => 'bad-document $path';
+
+  @override
+  String toString() => 'DocumentParseException($path) $cause';
+}
 
 /// Cloud Firestore + callable Cloud Functions.
 ///
@@ -34,20 +53,53 @@ class FirestoreRepository implements EatStreakRepository {
   CollectionReference<Map<String, dynamic>> get _suggestions =>
       _db.collection('shopSuggestions');
 
+  /// Parse a query's documents, saying which one failed when one does.
+  ///
+  /// Every model reads `json['id'] as String` unconditionally, so a document
+  /// written without the redundant `id` field — by hand in the console, or by
+  /// any writer that reasonably trusts the document key — threw a bare cast
+  /// error from inside a `Future.wait`, naming neither the collection nor the
+  /// document. The key *is* that id, so it is supplied here rather than
+  /// demanded of the data, and anything still unparseable is reported with its
+  /// path.
+  ///
+  /// Deliberately not skipped. One bad document does fail the whole read, and
+  /// that is the lesser evil: dropping it quietly would render an owner's own
+  /// unreadable shop as "No shop yet — Register shop", which is the exact
+  /// failure [StoreScope] was written to stop.
   static List<T> _map<T>(
     QuerySnapshot<Map<String, dynamic>> snap,
     T Function(Map<String, dynamic>) parse,
   ) =>
-      snap.docs.map((d) => parse(d.data())).toList();
+      snap.docs.map((d) => _parse(d, parse)).toList();
+
+  static T _parse<T>(
+    DocumentSnapshot<Map<String, dynamic>> snap,
+    T Function(Map<String, dynamic>) parse,
+  ) {
+    try {
+      return parse(snap.data()!..putIfAbsent('id', () => snap.id));
+    } catch (e) {
+      debugPrint('Unparseable doc ${snap.reference.path}: ${e.runtimeType} / $e');
+      throw DocumentParseException(snap.reference.path, e);
+    }
+  }
+
+  /// The single-document counterpart of [_map]: same `id` fallback, but a parse
+  /// failure still throws. One document is the whole answer here, so there is
+  /// nothing to degrade to — silently returning null would read as "no profile"
+  /// or "no such shop" and walk the user into onboarding or a dead end.
+  static T? _one<T>(
+    DocumentSnapshot<Map<String, dynamic>> snap,
+    T Function(Map<String, dynamic>) parse,
+  ) =>
+      snap.data() == null ? null : _parse(snap, parse);
 
   // ---- users ---------------------------------------------------------------
 
   @override
-  Future<AppUser?> getUser(String id) async {
-    final snap = await _users.doc(id).get();
-    final data = snap.data();
-    return data == null ? null : AppUser.fromJson(data);
-  }
+  Future<AppUser?> getUser(String id) async =>
+      _one(await _users.doc(id).get(), AppUser.fromJson);
 
   @override
   Future<void> updateUser(AppUser user) =>
@@ -65,11 +117,8 @@ class FirestoreRepository implements EatStreakRepository {
   Future<List<Shop>> getShops() async => _map(await _shops.get(), Shop.fromJson);
 
   @override
-  Future<Shop?> getShop(String id) async {
-    final snap = await _shops.doc(id).get();
-    final data = snap.data();
-    return data == null ? null : Shop.fromJson(data);
-  }
+  Future<Shop?> getShop(String id) async =>
+      _one(await _shops.doc(id).get(), Shop.fromJson);
 
   @override
   Future<void> updateShop(Shop shop) =>
@@ -84,8 +133,11 @@ class FirestoreRepository implements EatStreakRepository {
 
   @override
   Future<Shop?> shopBySourceQr(String sourceQr) async {
-    final snap = await _shops.where('sourceQR', isEqualTo: sourceQr).limit(1).get();
-    return snap.docs.isEmpty ? null : Shop.fromJson(snap.docs.first.data());
+    final shops = _map(
+      await _shops.where('sourceQR', isEqualTo: sourceQr).limit(1).get(),
+      Shop.fromJson,
+    );
+    return shops.isEmpty ? null : shops.first;
   }
 
   // ---- streaks (read-only) -------------------------------------------------
@@ -101,11 +153,8 @@ class FirestoreRepository implements EatStreakRepository {
       );
 
   @override
-  Future<Streak?> getStreak(String userId, String shopId) async {
-    final snap = await _streaks.doc('${userId}_$shopId').get();
-    final data = snap.data();
-    return data == null ? null : Streak.fromJson(data);
-  }
+  Future<Streak?> getStreak(String userId, String shopId) async =>
+      _one(await _streaks.doc('${userId}_$shopId').get(), Streak.fromJson);
 
   // ---- vouchers (read-only) ------------------------------------------------
 
@@ -123,13 +172,22 @@ class FirestoreRepository implements EatStreakRepository {
 
   /// ISO-8601 timestamps sort lexicographically, so a `yyyy-MM-dd` string is a
   /// valid lower bound without storing a second field.
+  ///
+  /// The `orderBy` is not for the caller — nothing reads these in order — it is
+  /// there so the query names the index it needs. An inequality with no
+  /// ordering is served by whichever composite index Firestore infers, and the
+  /// two deployed for `visits` are both `timestamp DESC`; spelling it out is
+  /// the difference between matching them and finding out from a
+  /// `failed-precondition` on someone's phone.
   Query<Map<String, dynamic>> _visitsSince(
     Query<Map<String, dynamic>> query,
     String? since,
   ) =>
       since == null
           ? query
-          : query.where('timestamp', isGreaterThanOrEqualTo: since);
+          : query
+              .where('timestamp', isGreaterThanOrEqualTo: since)
+              .orderBy('timestamp', descending: true);
 
   @override
   Future<List<Visit>> getVisitsForUser(String userId, {String? since}) async =>

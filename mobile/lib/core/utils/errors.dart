@@ -1,7 +1,7 @@
 /// Map a backend failure to a sentence fit for a toast. Ported from
 /// src/utils/errors.ts; matches Firebase's callable/Firestore error codes.
 String friendlyErrorMessage(Object? error) {
-  final code = _codeOf(error).toLowerCase();
+  final code = errorCode(error).toLowerCase();
 
   if (code.contains('unauthenticated')) {
     return 'Please sign in again to continue.';
@@ -20,7 +20,12 @@ String friendlyErrorMessage(Object? error) {
   return 'Something went wrong. Please try again.';
 }
 
-String _codeOf(Object? error) {
+/// The raw code behind a failure — `permission-denied`, `unavailable` — as
+/// opposed to the sentence [friendlyErrorMessage] turns it into. Shown in small
+/// type under that sentence on the failure screens: the sentence is for the
+/// user, this is the only place the actual cause is ever visible on a device
+/// whose logs we cannot read.
+String errorCode(Object? error) {
   if (error == null) return '';
   try {
     // FirebaseException and friends expose `.code`; anything else falls back to

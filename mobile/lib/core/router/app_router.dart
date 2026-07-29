@@ -325,6 +325,15 @@ class _SplashScreen extends ConsumerWidget {
                 textAlign: TextAlign.center,
                 style: AppText.body(size: 14, height: 1.45),
               ),
+              const SizedBox(height: 4),
+              // The code behind the sentence, for the same reason the store's
+              // failure screen carries one: "something went wrong" is not a
+              // diagnosis, and this phone's logs are unreachable.
+              Text(
+                errorCode(auth.profileError!),
+                textAlign: TextAlign.center,
+                style: AppText.body(size: 12, color: AppColors.muted2),
+              ),
               const SizedBox(height: 24),
               GradientButton(
                 label: 'Try again',
