@@ -14,6 +14,7 @@ class VoucherCard extends StatelessWidget {
     super.key,
     required this.voucher,
     this.onRedeem,
+    this.onShow,
     this.onTap,
   });
 
@@ -23,6 +24,10 @@ class VoucherCard extends StatelessWidget {
   /// for the owner-side verification screen, which shows the voucher it is
   /// about to honour.
   final VoidCallback? onRedeem;
+
+  /// Opens the voucher full-screen for staff to scan. This is the customer's
+  /// action — it presents the code, it does not spend it.
+  final VoidCallback? onShow;
   final VoidCallback? onTap;
 
   @override
@@ -169,35 +174,47 @@ class VoucherCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (!voucher.isRedeemed && !isExpired && onRedeem != null)
-                GestureDetector(
-                  onTap: onRedeem,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Spacing.md,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: Radii.smAll,
-                      gradient: const LinearGradient(
-                        colors: [AppColors.ember1, AppColors.ember2],
-                      ),
-                    ),
-                    child: Text(
-                      'Use',
-                      style: AppText.heading(
-                        size: 13,
-                        color: AppColors.primaryInk,
-                      ),
-                    ),
-                  ),
-                ),
+              if (!voucher.isRedeemed && !isExpired) ...[
+                if (onShow != null)
+                  _action('Show', Icons.qr_code_2_rounded, onShow!),
+                if (onRedeem != null) _action('Use', null, onRedeem!),
+              ],
             ],
           ),
         ],
       ),
     );
   }
+
+  Widget _action(String label, IconData? icon, VoidCallback onTap) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: Spacing.md,
+            vertical: 6,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: Radii.smAll,
+            gradient: const LinearGradient(
+              colors: [AppColors.ember1, AppColors.ember2],
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 14, color: AppColors.primaryInk),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: AppText.heading(size: 13, color: AppColors.primaryInk),
+              ),
+            ],
+          ),
+        ),
+      );
 
   Widget _badge(String text, Color color) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

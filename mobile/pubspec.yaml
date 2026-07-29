@@ -43,6 +43,13 @@ dependencies:
   app_links: ^7.2.1
   firebase_analytics: ^12.4.5
 
+  # At the counter
+  # Hold the screen awake while a code is being shown to a customer — a shop
+  # propping a phone by the till would otherwise watch it sleep every 30s.
+  wakelock_plus: ^1.7.0
+  # Long-press the app icon: "Scan" for a customer, "Show code" for an owner.
+  quick_actions: ^1.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

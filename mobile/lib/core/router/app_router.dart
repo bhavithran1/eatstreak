@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../data/models/enums.dart';
+import '../../data/models/voucher.dart';
 import '../../features/auth/onboarding_screen.dart';
 import '../../features/auth/sign_in_screen.dart';
 import '../../features/customer/check_in_screen.dart';
@@ -16,8 +17,10 @@ import '../../features/customer/scan_success_screen.dart';
 import '../../features/customer/scanner_screen.dart';
 import '../../features/customer/shop_detail_screen.dart';
 import '../../features/customer/shop_not_found_screen.dart';
+import '../../features/customer/show_voucher_screen.dart';
 import '../../features/customer/vouchers_screen.dart';
 import '../../features/owner/choose_plan_screen.dart';
+import '../../features/owner/counter_code_screen.dart';
 import '../../features/owner/edit_shop_screen.dart';
 import '../../features/owner/customers_screen.dart';
 import '../../features/owner/dashboard_screen.dart';
@@ -166,6 +169,29 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootKey,
         builder: (_, state) =>
             ShopDetailScreen(shopId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: Routes.counterCode,
+        parentNavigatorKey: _rootKey,
+        builder: (_, state) {
+          final args = state.extra;
+          // Only reachable from the QR screen, which already has today's code
+          // in hand. Without one there is nothing to display, so go back to the
+          // screen that fetches it.
+          if (args is! CounterCodeArgs) return const OwnerQrCodeScreen();
+          return CounterCodeScreen(args: args);
+        },
+      ),
+      GoRoute(
+        path: Routes.showVoucher,
+        parentNavigatorKey: _rootKey,
+        builder: (_, state) {
+          final voucher = state.extra;
+          // Only ever opened from a voucher card. Without one there is nothing
+          // to show, so send them back to the list rather than an empty screen.
+          if (voucher is! Voucher) return const VouchersScreen();
+          return ShowVoucherScreen(voucher: voucher);
+        },
       ),
       GoRoute(
         path: Routes.scanSuccess,

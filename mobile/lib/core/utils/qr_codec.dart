@@ -9,8 +9,50 @@ library;
 import 'dart:convert';
 
 import '../config/env.dart';
+import 'formatters.dart';
 
 const appScheme = 'eatstreak';
+
+/// Marks the QR on a customer's voucher, scanned by the *owner* to redeem it.
+///
+/// Deliberately not a link. A voucher code is shown by one phone and read by
+/// another standing next to it, so there is nobody for a URL to serve: an
+/// `https://` payload would make the stock camera offer to open a page, and a
+/// `eatstreak://` one would deep-link the customer's own phone into an app they
+/// are already holding. Plain text does nothing when scanned by anything that
+/// is not the owner's redemption screen, which is exactly right.
+const voucherQrPrefix = 'EATSTREAK:V1:VOUCHER:';
+
+/// The payload printed into the QR on a customer's voucher.
+String buildVoucherPayload(String code) => '$voucherQrPrefix$code';
+
+/// Pull a voucher code out of a scanned payload, or null if it isn't one.
+///
+/// Accepts the QR payload and a bare `EAT-XXXXXX`, so the same entry point
+/// serves the camera and a code read aloud and typed in. Normalisation is
+/// [normalizeVoucherCode]'s, so a scan and a typed code agree on what "the same
+/// voucher" means.
+String? parseVoucherCode(String data) {
+  final trimmed = data.trim();
+
+  final body = trimmed.toUpperCase().startsWith(voucherQrPrefix)
+      ? trimmed.substring(voucherQrPrefix.length)
+      : trimmed;
+
+  // A bare code only counts when the whole payload is one. Without this a menu
+  // URL that happens to contain "eat" somewhere would normalise into a code.
+  if (body != trimmed && body.isEmpty) return null;
+  if (body == trimmed && !_looksLikeBareCode(trimmed)) return null;
+
+  final normalized = normalizeVoucherCode(body);
+  return normalized.isEmpty ? null : normalized;
+}
+
+/// `EAT-XXXXXX`, give or take the spacing and the prefix staff leave off.
+bool _looksLikeBareCode(String data) => RegExp(
+      '^(${voucherCodePrefix.replaceAll('-', '')}[- ]?)?[A-Z0-9]{$voucherCodeLength}\$',
+      caseSensitive: false,
+    ).hasMatch(data.trim());
 
 /// Firebase Hosting serves every site on both domains; accept either.
 Set<String> get _checkInHosts => {
@@ -155,6 +197,11 @@ bool _isMachinePayload(String data) {
     'MAILTO:',
     'BITCOIN:',
     'OTPAUTH:', // 2FA seed — a secret, and never a shop
+    // Our own voucher QR. A customer pointing the scanner at their own voucher
+    // is a normal mistake — it is the only other code in this app — and without
+    // this the suggestion form offers "EATSTREAK:V1:VOUCHER:EAT-ABC123" as the
+    // name of a restaurant to add.
+    voucherQrPrefix,
   ];
   final upper = data.toUpperCase();
   return prefixes.any(upper.startsWith);

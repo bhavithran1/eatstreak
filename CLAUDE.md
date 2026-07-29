@@ -65,7 +65,31 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
   client write path for them.
 - **Redemption belongs to the owner.** `redeemVoucherByCode` is called by the shop, not
   the customer — the customer's voucher view is deliberately read-only so a discount can
-  neither be faked nor accidentally burned.
+  neither be faked nor accidentally burned. The customer *presents*: "Show" opens the
+  voucher full-screen with a QR, and the owner scans it on `/verify-voucher`, which leads
+  with the camera and keeps the text field beneath it. Scanning changes who types, not
+  who decides — the server still verifies owner, spend and expiry.
+  The voucher QR is `EATSTREAK:V1:VOUCHER:<code>` (`qr_codec.dart`), deliberately **not**
+  a link: an `https://` payload makes the stock camera offer to open a page, and an
+  `eatstreak://` one deep-links the customer's own phone into the app they are already
+  holding. It is also listed in `_isMachinePayload`, or a customer scanning their own
+  voucher gets it offered as the name of a restaurant to add — the wifi bug again.
+- **The counter code may leave the phone, because it is per-day.** "Show on the counter"
+  (`counter_code_screen.dart`) is one white sheet doing two jobs: propped by the till it
+  is a display that holds the screen awake, and shared it is the same sheet as a PNG,
+  which iOS will print. That is only sound because the code is stable until midnight — a
+  printed sheet is worth exactly what holding the phone up is worth, and expires at the
+  same moment. **Anything per-scan or per-minute could never leave the screen**, so
+  changing the token's lifetime silently breaks printing. The sheet is dated for the one
+  failure it can have: a sheet still taped up the next morning.
+- **The QR screen refetches when the day changes.** A phone left on the counter overnight
+  came back showing yesterday's code and scanned as `code_invalid` for every customer
+  until someone reopened the screen. `didChangeAppLifecycleState` compares the day the
+  code was fetched against today.
+- **Home-screen shortcuts follow the role, not the session.** `counter_shortcuts.dart`:
+  customers get "Scan", owners get "Show code" and "Redeem voucher", signed-out gets
+  nothing — those routes all bounce off the auth gate, so a shortcut there is a button
+  that looks broken. Best-effort by design and never awaited on the way to a first frame.
 - **A broken streak is repaired with embers, not money.** Cost scales with the streak
   that broke (`repairCost`), inside `REPAIR_GRACE_DAYS`, minimum `MIN_REPAIRABLE_STREAK`.
   The server decides eligibility and price; the client only offers the button.

@@ -9,6 +9,12 @@ abstract final class Routes {
   static const scanner = '/scan';
   static const vouchers = '/vouchers';
   static const customerProfile = '/profile';
+
+  /// The voucher held up at the counter for staff to scan. Takes the voucher
+  /// itself as `extra` rather than an id in the path: it is only ever opened
+  /// from a card the customer is already looking at, and a link into someone's
+  /// discount is not a thing worth existing.
+  static const showVoucher = '/voucher';
   static const scanSuccess = '/scan-success';
   static const shopNotFound = '/shop-not-found';
   static const shopDetailPattern = '/shop/:id';
@@ -17,6 +23,9 @@ abstract final class Routes {
   // Owner
   static const ownerDashboard = '/dashboard';
   static const ownerQrCode = '/qr-code';
+
+  /// Today's code full-screen, for propping on the counter or printing.
+  static const counterCode = '/counter-code';
   static const ownerRewards = '/rewards';
   static const ownerCustomers = '/customers';
   static const ownerProfile = '/owner-profile';

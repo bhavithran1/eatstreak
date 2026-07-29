@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/router/app_router.dart';
+import 'core/router/counter_shortcuts.dart';
 import 'core/router/deep_links.dart';
 import 'core/router/routes.dart';
 import 'core/theme/app_theme.dart';
@@ -58,6 +59,7 @@ class CheckInLinkHost extends ConsumerStatefulWidget {
 
 class _CheckInLinkHostState extends ConsumerState<CheckInLinkHost> {
   late final DeepLinkService _links = DeepLinkService(widget.router);
+  late final CounterShortcuts _shortcuts = CounterShortcuts(widget.router);
   bool _resuming = false;
 
   @override
@@ -80,6 +82,14 @@ class _CheckInLinkHostState extends ConsumerState<CheckInLinkHost> {
           previous.isOnboarded;
       if (next.isSignedIn && next.isOnboarded && !wasReady) {
         _resume(next.role);
+      }
+
+      // Follows the role rather than the session: switching between the
+      // customer and owner views is a normal thing to do here, and leaving
+      // "Show code" on a customer's home screen would open a screen their own
+      // app has no use for.
+      if (previous?.role != next.role || previous == null) {
+        unawaited(_shortcuts.applyFor(next.isOnboarded ? next.role : null));
       }
     });
 

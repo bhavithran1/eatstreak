@@ -111,4 +111,43 @@ void main() {
       }
     });
   });
+
+  group('voucher codes', () {
+    test('a voucher QR round-trips', () {
+      expect(parseVoucherCode(buildVoucherPayload('EAT-ABC123')), 'EAT-ABC123');
+    });
+
+    test('a code read aloud and typed in resolves the same voucher', () {
+      // The counter fallback: a cracked screen, a dim one, a flat battery. What
+      // staff type has to mean the same thing as what the camera reads.
+      for (final typed in ['EAT-ABC123', 'eat-abc123', 'ABC123', 'EAT ABC123']) {
+        expect(parseVoucherCode(typed), 'EAT-ABC123', reason: typed);
+      }
+    });
+
+    test('a check-in code is not a voucher', () {
+      expect(parseVoucherCode(buildCheckInLink('shop_ramen', token: 'abc')), isNull);
+    });
+
+    test('the codes customers actually point a camera at are not vouchers', () {
+      for (final raw in [
+        'https://menu.warungpakcik.com.my/table/12',
+        'upi://pay?pa=warung@maybank&pn=Warung%20Pak%20Cik&cu=MYR',
+        'WIFI:S:WarungPakCik_Guest;T:WPA;P:makanlah123;;',
+        'Warung Pak Cik',
+        '',
+        '   ',
+      ]) {
+        expect(parseVoucherCode(raw), isNull, reason: raw);
+      }
+    });
+
+    test("a customer's own voucher is never offered as a shop to add", () {
+      // The wifi bug again, with our own payload: 'EATSTREAK:V1:VOUCHER:...' is
+      // short enough to have passed as a restaurant name.
+      final parsed = parseExternalQr(buildVoucherPayload('EAT-ABC123'));
+
+      expect(parsed.extractedName, isNull);
+    });
+  });
 }

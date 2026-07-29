@@ -9,8 +9,10 @@ import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/utils/dates.dart';
 import '../../core/utils/errors.dart';
 import '../../core/utils/qr_codec.dart';
+import 'counter_code_screen.dart';
 import '../../data/models/check_in_token.dart';
 import '../../data/models/shop.dart';
 import '../../state/store_controller.dart';
@@ -30,11 +32,40 @@ class OwnerQrCodeScreen extends ConsumerStatefulWidget {
   ConsumerState<OwnerQrCodeScreen> createState() => _OwnerQrCodeScreenState();
 }
 
-class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
+class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen>
+    with WidgetsBindingObserver {
   CheckInToken? _token;
   bool _loading = false;
   Object? _error;
   bool _started = false;
+
+  /// The day the code on screen belongs to, so a stale one can be spotted.
+  String? _loadedOn;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// A phone that sat on the counter overnight comes back showing yesterday's
+  /// code, which scans as `code_invalid` for every customer until someone
+  /// thinks to reopen the screen. The code is per-day, so the day changing is
+  /// exactly when it has to be refetched.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (_loadedOn == null || _loadedOn == todayString()) return;
+
+    final shop = ref.read(storeControllerProvider).value?.ownedShop;
+    if (shop != null) unawaited(_load(shop.id));
+  }
 
   /// Fetch today's code. The server returns the same code all day, so opening
   /// this screen repeatedly is free — nothing rotates until tomorrow, or until
@@ -53,6 +84,7 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
       if (!mounted) return;
       setState(() {
         _token = token;
+        _loadedOn = todayString();
         _loading = false;
       });
     } catch (e) {
@@ -151,7 +183,37 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
           textAlign: TextAlign.center,
           style: AppText.body(size: 13),
         ),
-        const SizedBox(height: Spacing.md),
+        const SizedBox(height: Spacing.lg),
+        // The counter actions, in the order a shop needs them: put the code out
+        // where customers can reach it, then honour what they earned. Both used
+        // to be somewhere else — the second was a push off the dashboard, which
+        // is the wrong screen to be on when someone is standing in front of you.
+        if (_token != null) ...[
+          GradientButton(
+            label: 'Show on the counter',
+            icon: Icons.fullscreen,
+            size: GradientButtonSize.lg,
+            expand: true,
+            onPressed: () => context.push(
+              Routes.counterCode,
+              extra: CounterCodeArgs(
+                shopId: shop.id,
+                shopName: shop.name,
+                token: _token!.token,
+              ),
+            ),
+          ),
+          const SizedBox(height: Spacing.sm),
+          GradientButton(
+            label: 'Redeem a voucher',
+            icon: Icons.qr_code_scanner,
+            variant: GradientButtonVariant.outline,
+            size: GradientButtonSize.lg,
+            expand: true,
+            onPressed: () => context.push(Routes.verifyVoucher),
+          ),
+          const SizedBox(height: Spacing.sm),
+        ],
         GradientButton(
           label: _error == null ? 'Reset code' : 'Try again',
           icon: Icons.refresh,
