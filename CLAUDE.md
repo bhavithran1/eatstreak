@@ -82,10 +82,17 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
   same moment. **Anything per-scan or per-minute could never leave the screen**, so
   changing the token's lifetime silently breaks printing. The sheet is dated for the one
   failure it can have: a sheet still taped up the next morning.
-- **The QR screen refetches when the day changes.** A phone left on the counter overnight
-  came back showing yesterday's code and scanned as `code_invalid` for every customer
-  until someone reopened the screen. `didChangeAppLifecycleState` compares the day the
-  code was fetched against today.
+- **Both code screens refetch when the day changes** (`day_rollover.dart`). A phone left
+  on the counter overnight came back showing yesterday's code and scanned as
+  `code_invalid` for every customer until someone reopened the screen. Two triggers, and
+  both are needed: **resume** for the phone picked up in the morning, and a **poll** for
+  the phone that was never backgrounded — these screens hold a wakelock precisely so they
+  stay up all night, so the app can be foregrounded straight through midnight and see no
+  lifecycle event at all. Polling beats one timer set for midnight: a long timer does not
+  survive sleep and gets the wrong answer across a clock or timezone change. The counter
+  sheet needs its own watcher — the screen behind it refetching does not rebuild it — and
+  when the refetch fails it says the sheet is stale rather than leaving a dead QR up,
+  because a dead QR looks completely fine.
 - **Home-screen shortcuts follow the role, not the session.** `counter_shortcuts.dart`:
   customers get "Scan", owners get "Show code" and "Redeem voucher", signed-out gets
   nothing — those routes all bounce off the auth gate, so a shortcut there is a button
@@ -113,6 +120,14 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
 
 ## Rules that break things when ignored
 
+- **A fixed pixel size on a counter screen is a bug waiting for a narrow phone.**
+  `test/features/layout_stress_test.dart` renders the counter sheet, the held-up voucher,
+  the voucher card and the store failure screen across four widths and three text scales,
+  and fails on overflow. It found the voucher card overflowing at *default* text size on
+  every device, and a failure screen whose Retry button fell off the bottom at
+  accessibility sizes. Sizes there are derived from `MediaQuery` and clamped; where a
+  fixed size is genuinely wanted, `FittedBox(scaleDown)` keeps it whole. Run it after
+  touching any of those layouts — one simulator cannot see this.
 - **Ported logic must stay in agreement, and the agreement must be tested.** The pairs:
   - `functions/src/streakLogic.ts` ↔ `mobile/lib/domain/streak_logic.dart` (check-in,
     embers, repair) — tested by `streakLogic.test.ts` and `test/domain/streak_logic_test.dart`

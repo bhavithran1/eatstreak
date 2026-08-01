@@ -54,6 +54,9 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # Stubbed in the layout stress test — the counter screens hold the screen
+  # awake, and there is no platform to do that on under `flutter test`.
+  wakelock_plus_platform_interface: ^1.6.0
   flutter_launcher_icons: ^0.14.4
 
 flutter:

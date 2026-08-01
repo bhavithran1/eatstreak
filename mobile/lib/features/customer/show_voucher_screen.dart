@@ -119,9 +119,16 @@ class _ShowVoucherScreenState extends State<ShowVoucherScreen> {
     );
   }
 
-  Widget _qrPanel(Voucher v) => Container(
-        width: 268,
-        height: 268,
+  Widget _qrPanel(Voucher v) {
+    // Sized off the screen rather than fixed: this panel is held up to someone
+    // else's camera, so it should be as big as the phone allows, and must not
+    // run off the narrow ones.
+    final side =
+        (MediaQuery.sizeOf(context).width - Spacing.xl * 2).clamp(220.0, 268.0);
+
+    return Container(
+        width: side,
+        height: side,
         padding: const EdgeInsets.all(Spacing.lg),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -130,7 +137,7 @@ class _ShowVoucherScreenState extends State<ShowVoucherScreen> {
         child: Center(
           child: QrImageView(
             data: buildVoucherPayload(v.code),
-            size: 224,
+            size: side - Spacing.lg * 2,
             backgroundColor: Colors.white,
             // Same reason as the owner's code: a phone screen held at an angle
             // under a shop's lighting is a bad surface to read a QR off.
@@ -145,7 +152,8 @@ class _ShowVoucherScreenState extends State<ShowVoucherScreen> {
             ),
           ),
         ),
-      );
+    );
+  }
 
   /// The code in type big enough to read aloud across a counter, and copyable
   /// for the times it gets sent rather than shown.
@@ -167,21 +175,29 @@ class _ShowVoucherScreenState extends State<ShowVoucherScreen> {
             borderRadius: Radii.lgAll,
             border: Border.all(color: AppColors.line2),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                v.code,
-                style: AppText.heading(
-                  size: 26,
-                  weight: FontWeight.w700,
-                  color: AppColors.ember1,
-                  letterSpacing: 4,
+          // A letter-spaced code at 26pt is already most of a narrow screen;
+          // one step up in text size and it is off the edge. Scaling down is
+          // the right trade here — smaller but whole beats large and cut off,
+          // when the entire job of the line is to be read out loud.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  v.code,
+                  style: AppText.heading(
+                    size: 26,
+                    weight: FontWeight.w700,
+                    color: AppColors.ember1,
+                    letterSpacing: 4,
+                  ),
                 ),
-              ),
-              const SizedBox(width: Spacing.sm),
-              const Icon(Icons.copy_rounded, size: 16, color: AppColors.muted2),
-            ],
+                const SizedBox(width: Spacing.sm),
+                const Icon(Icons.copy_rounded,
+                    size: 16, color: AppColors.muted2),
+              ],
+            ),
           ),
         ),
       );

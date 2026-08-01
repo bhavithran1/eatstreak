@@ -87,7 +87,12 @@ class VoucherCard extends StatelessWidget {
   Widget _stub() => SizedBox(
         width: 90,
         child: Center(
-          child: Row(
+          // The stub is a fixed 90 and the number inside it is not: a 100%
+          // reward, or anyone running larger text, walks straight out of it.
+          // Scaling down keeps the ticket shape, which is the point of the stub.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -118,6 +123,7 @@ class VoucherCard extends StatelessWidget {
                 ],
               ),
             ],
+            ),
           ),
         ),
       );
@@ -174,11 +180,26 @@ class VoucherCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (!voucher.isRedeemed && !isExpired) ...[
-                if (onShow != null)
-                  _action('Show', Icons.qr_code_2_rounded, onShow!),
-                if (onRedeem != null) _action('Use', null, onRedeem!),
-              ],
+              // Scaled down rather than clipped: the buttons and the expiry
+              // line share one row, and adding "Show" alongside "Use" was
+              // already enough to push past the edge at default text size.
+              if (!voucher.isRedeemed && !isExpired)
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (onShow != null)
+                          _action('Show', Icons.qr_code_2_rounded, onShow!),
+                        if (onShow != null && onRedeem != null)
+                          const SizedBox(width: Spacing.sm),
+                        if (onRedeem != null) _action('Use', null, onRedeem!),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ],

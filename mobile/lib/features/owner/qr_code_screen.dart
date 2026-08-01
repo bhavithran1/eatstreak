@@ -10,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/dates.dart';
+import '../../core/utils/day_rollover.dart';
 import '../../core/utils/errors.dart';
 import '../../core/utils/qr_codec.dart';
 import 'counter_code_screen.dart';
@@ -32,37 +33,25 @@ class OwnerQrCodeScreen extends ConsumerStatefulWidget {
   ConsumerState<OwnerQrCodeScreen> createState() => _OwnerQrCodeScreenState();
 }
 
-class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen>
-    with WidgetsBindingObserver {
+class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen> {
   CheckInToken? _token;
   bool _loading = false;
   Object? _error;
   bool _started = false;
 
-  /// The day the code on screen belongs to, so a stale one can be spotted.
-  String? _loadedOn;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
   /// A phone that sat on the counter overnight comes back showing yesterday's
   /// code, which scans as `code_invalid` for every customer until someone
   /// thinks to reopen the screen. The code is per-day, so the day changing is
   /// exactly when it has to be refetched.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) return;
-    if (_loadedOn == null || _loadedOn == todayString()) return;
+  late final DayRollover _rollover = DayRollover(onNewDay: _reloadForNewDay);
 
+  @override
+  void dispose() {
+    _rollover.dispose();
+    super.dispose();
+  }
+
+  void _reloadForNewDay() {
     final shop = ref.read(storeControllerProvider).value?.ownedShop;
     if (shop != null) unawaited(_load(shop.id));
   }
@@ -82,9 +71,9 @@ class _OwnerQrCodeScreenState extends ConsumerState<OwnerQrCodeScreen>
           .read(storeControllerProvider.notifier)
           .createCheckInToken(shopId, rotate: rotate);
       if (!mounted) return;
+      _rollover.start(todayString());
       setState(() {
         _token = token;
-        _loadedOn = todayString();
         _loading = false;
       });
     } catch (e) {

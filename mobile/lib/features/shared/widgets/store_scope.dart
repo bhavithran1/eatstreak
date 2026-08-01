@@ -57,9 +57,23 @@ class _Frame extends StatelessWidget {
 
   final Widget child;
 
+  /// Scrollable, because this frame holds the only way out of a failure.
+  ///
+  /// A fixed [Center] fits at default text size and clips at accessibility
+  /// sizes, and what falls off the bottom is the Retry button — leaving someone
+  /// who has enlarged their text stuck on an error with nothing to press.
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: AppColors.bg,
-        body: SafeArea(child: Center(child: child)),
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Center(child: child),
+              ),
+            ),
+          ),
+        ),
       );
 }
