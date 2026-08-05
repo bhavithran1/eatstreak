@@ -133,10 +133,34 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
     embers, repair) — tested by `streakLogic.test.ts` and `test/domain/streak_logic_test.dart`
   - `functions/src/streakLogic.ts` ↔ `mobile/lib/core/utils/formatters.dart` (voucher
     codes) — tested by the "voucher codes" block and `test/core/formatters_test.dart`
+  - `functions/src/dates.ts` ↔ `mobile/lib/core/utils/dates.dart` (`daysBetween`,
+    `addDays`) — tested by `dates.test.ts` and `test/core/dates_test.dart`
 
   A shared value belongs in a named constant on both sides, with a test asserting the
   number literally. The voucher code generators drifted to 4 and 6 characters and nobody
   noticed for months, because "keep these in sync" was a comment rather than an assertion.
+  The date pair drifted the same way on unreadable input, and worse: TypeScript returned
+  a silent `NaN` — which compares false against every threshold, so it quietly *preserved*
+  a streak — while Dart threw a `FormatException` out of `build()` and red-screened the
+  owner dashboard. Both now answer `UNKNOWN_DATE_DISTANCE_DAYS` / `unknownDateDistanceDays`
+  (99999), asserted literally on both sides. It is deliberately large: an unreadable
+  last-visit date has to read as "long ago" and lapse a streak, never as "today".
+
+  **Only two bare `yyyy-MM-dd` days are promised to agree exactly.** An ISO instant is
+  accepted so neither side throws, but the two parse a bare day in different zones —
+  Dart in device-local time, TypeScript in UTC — so instant-vs-day answers can differ by
+  a day. Don't build on that; both test suites assert only the range.
+- **`daysFromNow`'s sign is a contract: `> 0` means "not expired yet".** It is what
+  splits the Vouchers screen into Active and Expired, what the home and dashboard counts
+  filter on, and what `voucher_card` turns into "Expires today" (1) and "Expires
+  tomorrow" (2). Round fractional days up — do not reassemble it from `inHours ~/ 24`
+  plus `inHours % 24`. Dart's `%` is **non-negative for a positive divisor** (`-5 % 24`
+  is 19, not -5), so that version added a day to everything that had just expired and
+  answered 1: a voucher that lapsed overnight sat in Active reading "Expires today", the
+  customer held it up, and the counter rejected it, because `redeemVoucherByCode` checks
+  the real timestamp. The same slip pushed a voucher with an hour left into Expired,
+  where it could not be shown at all. Vouchers expire at 23:59:59Z — 07:59 local — so
+  the wrong answer landed every morning.
 - Screens talk only to `EatStreakRepository`. Adding a data method means implementing it
   in **both** `DemoRepository` and `FirestoreRepository`.
 - **Nothing best-effort may be awaited before `runApp`.** `main()` awaits

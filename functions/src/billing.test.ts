@@ -3,7 +3,12 @@
 // both are decidable without a Curlec account. Run: npm test
 
 import { createHmac } from 'crypto';
-import { verifyWebhookSignature, statusForEvent, shopIdFromPayload } from './billing';
+import {
+  verifyWebhookSignature,
+  statusForEvent,
+  shopIdFromPayload,
+  eventCreatedAtMs,
+} from './billing';
 
 let passed = 0;
 let failed = 0;
@@ -91,6 +96,47 @@ const sign = (b: string, secret = SECRET) =>
     shopIdFromPayload({ subscription: { entity: { notes: { shopId: 42 } } } }) === null);
 
   assert('a malformed payload does not throw', shopIdFromPayload(null) === null);
+}
+
+// --- event ordering ---------------------------------------------------------
+// Razorpay retries deliveries, so arrival order is not event order. Without a
+// timestamp to sort by, a retried `charged` landing after `cancelled` hands
+// access back to a shop that cancelled — access decided by network jitter.
+{
+  assert('reads created_at as epoch milliseconds',
+    eventCreatedAtMs({ created_at: 1772000000 }) === 1772000000000);
+
+  assert('a missing created_at is unorderable, not zero',
+    eventCreatedAtMs({ event: 'subscription.charged' }) === null);
+
+  assert('a string created_at is rejected',
+    eventCreatedAtMs({ created_at: '1772000000' }) === null);
+
+  assert('zero is rejected', eventCreatedAtMs({ created_at: 0 }) === null);
+
+  assert('a negative created_at is rejected',
+    eventCreatedAtMs({ created_at: -5 }) === null);
+
+  assert('NaN is rejected', eventCreatedAtMs({ created_at: NaN }) === null);
+
+  assert('Infinity is rejected',
+    eventCreatedAtMs({ created_at: Infinity }) === null);
+
+  assert('a malformed body does not throw', eventCreatedAtMs(null) === null);
+
+  assert('a non-object body does not throw',
+    eventCreatedAtMs('nonsense') === null);
+
+  // The ordering the webhook actually applies: a cancellation issued after a
+  // charge must win no matter which order the two are delivered in.
+  {
+    const charged = eventCreatedAtMs({ created_at: 1772000000 })!;
+    const cancelled = eventCreatedAtMs({ created_at: 1772000600 })!;
+    assert('a later cancellation sorts after an earlier charge',
+      cancelled > charged);
+    assert('so a replayed charge is recognisably stale',
+      charged < cancelled);
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

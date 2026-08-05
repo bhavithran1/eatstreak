@@ -17,7 +17,12 @@ import {
   repairInfo,
   applyRepair,
 } from './streakLogic';
-import { verifyWebhookSignature, statusForEvent, shopIdFromPayload } from './billing';
+import {
+  verifyWebhookSignature,
+  statusForEvent,
+  shopIdFromPayload,
+  eventCreatedAtMs,
+} from './billing';
 import {
   CHECK_IN_TOKEN_TTL_SECONDS,
   checkInTokenDocId,
@@ -359,6 +364,13 @@ export const redeemVoucherByCode = onCall(
 
     return db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
+      // The query above ran outside the transaction, so the doc can be gone by
+      // now. Without this, `voucher.isRedeemed` reads a property off undefined
+      // and the owner gets an opaque INTERNAL at the counter instead of a
+      // sentence they can act on.
+      if (!snap.exists) {
+        throw new HttpsError('not-found', 'No voucher with that code at your shop.');
+      }
       const voucher = snap.data() as Voucher;
 
       if (voucher.isRedeemed) {
@@ -420,10 +432,12 @@ export const curlecWebhook = onRequest(
 
     let event: string;
     let payload: unknown;
+    let eventAtMs: number | null;
     try {
       const parsed = JSON.parse(raw.toString('utf8'));
       event = parsed.event;
       payload = parsed.payload;
+      eventAtMs = eventCreatedAtMs(parsed);
     } catch {
       res.status(400).send('Malformed payload');
       return;
@@ -440,15 +454,43 @@ export const curlecWebhook = onRequest(
       return;
     }
 
-    await db.collection('subscriptions').doc(shopId).set(
-      {
-        shopId,
-        status,
-        lastEvent: event,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true },
-    );
+    // Ordered by the provider's own timestamp, not arrival: Razorpay retries,
+    // so a stale `charged` can land after a `cancelled` and would otherwise
+    // hand back access the owner has already given up. Read-then-write has to
+    // be a transaction or two concurrent retries race to the same conclusion.
+    const ref = db.collection('subscriptions').doc(shopId);
+    const applied = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const prevAt = snap.exists ? (snap.data()?.eventAtMs as number | undefined) : undefined;
+
+      // Equal timestamps fall through to the write: Razorpay can emit several
+      // events in the same second, and dropping those would lose real
+      // transitions. A duplicate delivery rewrites the same status anyway.
+      if (eventAtMs != null && typeof prevAt === 'number' && eventAtMs < prevAt) {
+        return false;
+      }
+
+      tx.set(
+        ref,
+        {
+          shopId,
+          status,
+          lastEvent: event,
+          // Only recorded when the provider gave us one, so an undated event
+          // can never pin the document's ordering to the moment it arrived.
+          ...(eventAtMs != null ? { eventAtMs } : {}),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      );
+      return true;
+    });
+
+    if (!applied) {
+      console.info(`curlecWebhook: ignoring out-of-order ${event} for ${shopId}`);
+      res.status(200).send('Stale');
+      return;
+    }
 
     console.info(`curlecWebhook: ${shopId} -> ${status} (${event})`);
     res.status(200).send('OK');

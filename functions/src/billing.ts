@@ -72,6 +72,28 @@ export function statusForEvent(event: string): SubscriptionStatus {
 }
 
 /**
+ * When the provider says the event happened, as epoch milliseconds.
+ *
+ * Razorpay puts a top-level `created_at` (epoch **seconds**) on every webhook,
+ * and retries failed deliveries — so events do not necessarily arrive in the
+ * order they occurred. Without an ordering key, a retried `subscription.charged`
+ * landing after a `subscription.cancelled` silently restores access to a shop
+ * that cancelled, and a retried `cancelled` revokes a customer who has since
+ * paid again. Both are decided by delivery jitter rather than by what happened.
+ *
+ * Null when absent or malformed, which the caller treats as "cannot order this
+ * one" and applies it — refusing an event we cannot timestamp would drop real
+ * state changes on the floor, which is the worse failure of the two.
+ */
+export function eventCreatedAtMs(body: unknown): number | null {
+  const created = (body as { created_at?: unknown })?.created_at;
+  if (typeof created !== 'number' || !Number.isFinite(created) || created <= 0) {
+    return null;
+  }
+  return Math.round(created * 1000);
+}
+
+/**
  * The shop a subscription belongs to.
  *
  * Set as `notes.shopId` when the subscription is created. Without it a webhook

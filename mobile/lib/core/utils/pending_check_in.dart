@@ -39,7 +39,13 @@ Future<PendingCheckIn?> consumePendingCheckIn() async {
   await prefs.remove(_key);
 
   try {
-    final decoded = jsonDecode(raw) as Map<String, dynamic>;
+    final decoded = jsonDecode(raw);
+    // Checked rather than cast. Valid JSON that isn't an object — an array, a
+    // bare number — fails a cast with a TypeError, which `on FormatException`
+    // does not hold, so it escaped this function entirely. Every other
+    // malformed shape here returns null; this one took out the routing hub
+    // instead, on the cold-start-from-a-scanned-link path.
+    if (decoded is! Map) return null;
     final shopId = decoded['shopId'];
     final at = decoded['at'];
     if (shopId is! String || at is! int) return null;
