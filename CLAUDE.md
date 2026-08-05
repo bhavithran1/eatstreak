@@ -13,7 +13,7 @@ flutter run -d <device-id> --dart-define-from-file=env.json
 
 # Cloud Functions — run from functions/
 npm run build
-npm test          # streakLogic + checkInToken + billing suites
+npm test          # streakLogic + checkInToken + billing + dates suites
 ```
 
 ## Non-obvious rules
@@ -39,6 +39,12 @@ npm test          # streakLogic + checkInToken + billing suites
   `unavailable` means unreachable, not asleep — check `transportType` in
   `devicectl list devices --json-output` before advising anything (`/ship` has the
   command). It is almost always `None`, meaning no cable is plugged in.
+  **As of 2026-08-02 there is no signing account in Xcode at all**, so the build above
+  stops before compiling with `No Accounts: Add a new account in Accounts settings` and
+  there is nothing to install. That is environmental — read it as a broken toolchain,
+  never as a regression in the change you are testing. To prove a change still compiles
+  for a device, add `--no-codesign`; the simulator path (`--simulator --debug`, which is
+  what `/scan-e2e` uses) is unaffected.
 - **Never run `firebase deploy`.** The user runs it — tell them the exact command. Same
   for `firebase functions:secrets:set` and anything else that wants a credential.
 - **Firestore's location is permanent.** It is `asia-southeast1`. Never create or

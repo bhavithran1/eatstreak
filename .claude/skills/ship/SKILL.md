@@ -36,6 +36,19 @@ The build (step 5) is the part that proves the change compiles for a real device
 works whether or not the phone is there. **Treat the install as a separate, optional
 step** — it is the one part of this loop that depends on hardware you don't control.
 
+**As of 2026-08-02 step 5 as written fails on this Mac**, before it compiles anything:
+
+```
+Error (Xcode): No Accounts: Add a new account in Accounts settings.
+Error (Xcode): No profiles for 'com.eatstreak.app' were found
+```
+
+There is no Apple account in Xcode, so nothing can be signed and step 6 has no app to
+install. This is a broken toolchain, **not a regression in the change under test** — do
+not go hunting through the diff for it, and do not try to add an account yourself, which
+needs the user's Apple ID. Run step 5 with `--no-codesign` added to prove the change
+still compiles for a device, and say plainly that signing was skipped.
+
 `unavailable` in `xcrun devicectl list devices`, or error 1011, means **unreachable** — it
 says nothing about why. Do not guess, and do not tell the user to wake the phone before
 you have looked. Read the device record:
