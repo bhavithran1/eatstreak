@@ -9,3 +9,9 @@ node_modules/
 
 # End-to-end scan suite output (regenerated every run).
 tool/e2e/out/
+
+# Firebase CLI debug logs, written into the repo root by deploy and by most
+# other firebase commands. Regenerated constantly and never worth committing.
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
