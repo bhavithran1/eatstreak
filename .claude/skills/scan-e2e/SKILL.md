@@ -170,17 +170,32 @@ installed. Only the hosting emulator runs on this machine — Firestore and Auth
 need a JRE and there is none — so `--only hosting` is not a shortcut, it is the
 whole available surface.
 
-Start it with the `hosting` preview config, then check the page rebuilds the
-link the app accepts:
+Start it with the `hosting` preview config. Two things to check, and they need
+different tools.
+
+**The rewrite** — curl is enough, because this is server behaviour:
 
 ```bash
-curl -s "http://localhost:5010/c/shop_ramen?t=demo_shop_ramen_TESTTOKEN" | grep -o 'id="open-app"[^>]*'
+curl -s -o /dev/null -w '%{http_code}\n' "http://localhost:5010/c/shop_ramen?t=demo_shop_ramen_TESTTOKEN"
 ```
 
-The `/c/**` rewrite must resolve, and `#open-app` must carry
-`eatstreak://check-in/shop_ramen?t=demo_shop_ramen_TESTTOKEN` — the exact form
-`parseCheckInTarget` accepts. A plain static server does not apply the rewrite,
-so testing this without the emulator proves nothing.
+200 means `/c/**` resolved to `/c/index.html`. A plain static server does not
+apply the rewrite, so testing this without the emulator proves nothing.
+
+**The deep link** — curl is *not* enough, and this instruction used to say it
+was. The static HTML ships `href="eatstreak://"` as a placeholder; the real link
+is built at runtime from `location.pathname` and `?t=` (`public/c/index.html`,
+the inline script near the bottom). Grepping the served HTML therefore always
+shows the bare scheme and never the shop — a check that cannot pass, which is
+worse than no check, because it reads as the page being broken when it is fine.
+Run the page and ask it:
+
+```js
+document.getElementById('open-app').getAttribute('href')
+```
+
+It must be `eatstreak://check-in/shop_ramen?t=demo_shop_ramen_TESTTOKEN` — the
+exact form `parseCheckInTarget` accepts. Verified working.
 
 ## Adding a fixture
 
