@@ -80,6 +80,32 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
   `eatstreak://` one deep-links the customer's own phone into the app they are already
   holding. It is also listed in `_isMachinePayload`, or a customer scanning their own
   voucher gets it offered as the name of a restaurant to add — the wifi bug again.
+- **Anything that grants value is minted from a CSPRNG, never `Math.random`.**
+  Check-in secrets are `randomBytes(18)` (144 bits). Voucher codes go through
+  `secureUnitInterval` in `streakLogic.ts` — they used to come from
+  `Math.random`, which V8 implements as xorshift128+: statistically fine and
+  entirely predictable once you have a run of its output. A voucher code is
+  handed to whoever earned it, so an attacker collects samples by visiting the
+  shop and reading their own codes; predicting what other customers get is a
+  much shorter path than guessing. `tool/preflight.py` fails on any
+  `Math.random(` under `functions/src`, and `streakLogic.test.ts` booby-traps
+  `Math.random` so a revert throws rather than shipping quietly.
+
+  **The code's length is not the lever it looks like.** 32⁶ ≈ 1.07 billion, and
+  `redeemVoucherByCode` scopes its lookup to `shopOwnerId == uid`, so a guess
+  only counts if it matches an unredeemed voucher *at the guesser's own shop*
+  and every attempt costs a conversation with staff. Lengthening the code while
+  the generator stayed predictable would have been theatre, and it would cost
+  the thing the alphabet was chosen for — staff reading it off a stranger's
+  phone. The alphabet is exactly 32 characters so `floor(unit * 32)` takes five
+  whole bits and favours no character; changing its length reintroduces modulo
+  bias.
+- **The check-in secret is compared with `timingSafeEqual`**, and the length is
+  checked first because that function *throws* on a mismatch — a truncated
+  paste would otherwise surface at the counter as an opaque INTERNAL rather
+  than "that code isn't valid". Over HTTPS through a cold-starting function the
+  timing signal was never the real risk; the guard is cheap and removes the
+  question.
 - **The counter code may leave the phone, because it is per-day.** "Show on the counter"
   (`counter_code_screen.dart`) is one white sheet doing two jobs: propped by the till it
   is a display that holds the screen awake, and shared it is the same sheet as a PNG,

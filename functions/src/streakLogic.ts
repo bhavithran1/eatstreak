@@ -7,6 +7,8 @@
 // test import these functions. That's what lets us verify the highest-risk math
 // without needing the Java-based emulator.
 
+import { randomBytes } from 'crypto';
+
 import { daysBetween, addDays } from './dates';
 import { RewardTier } from './types';
 
@@ -161,15 +163,46 @@ export const VOUCHER_CODE_LENGTH = 6;
 export const VOUCHER_CODE_PREFIX = 'EAT-';
 
 /**
- * EAT-XXXXXX code. The alphabet drops I, O, 0 and 1 — the pairs staff actually
- * confuse when reading a code off a stranger's phone. L stays: it is only
- * mistakable for 1, and 1 is already gone.
+ * The alphabet drops I, O, 0 and 1 — the pairs staff actually confuse when
+ * reading a code off a stranger's phone. L stays: it is only mistakable for 1,
+ * and 1 is already gone.
+ *
+ * Exactly 32 characters, which is load-bearing: `floor(unit * 32)` takes the
+ * top 5 bits of a uniform value, so every character is equally likely. An
+ * alphabet whose length is not a power of two reintroduces modulo bias — small,
+ * but free to avoid. Asserted in streakLogic.test.ts.
  */
-export function generateVoucherCode(rand: () => number = Math.random): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export const VOUCHER_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+/**
+ * A uniform value in [0, 1) from the system CSPRNG.
+ *
+ * This used to be `Math.random`, which is the wrong tool for a token worth
+ * money. V8 implements it as xorshift128+ — fast, statistically fine, and *not*
+ * unpredictable: the generator's internal state can be recovered from a run of
+ * outputs. A voucher code is handed to whoever earned it, so an attacker needs
+ * to breach nothing to collect samples — they visit the shop and read their own
+ * codes. From there, predicting what gets minted for other customers is a far
+ * shorter path than guessing.
+ *
+ * Nothing about the code's shape changes: same length, same alphabet, same
+ * thing to read out at the counter. Only where the bits come from.
+ *
+ * 32 bits per draw and only the top 5 survive the multiply, so there is ample
+ * precision for one character.
+ */
+export function secureUnitInterval(): number {
+  return randomBytes(4).readUInt32BE(0) / 0x1_0000_0000;
+}
+
+/**
+ * EAT-XXXXXX code. [rand] is injectable so tests can pin the output; production
+ * never passes it and gets [secureUnitInterval].
+ */
+export function generateVoucherCode(rand: () => number = secureUnitInterval): string {
   let code = '';
   for (let i = 0; i < VOUCHER_CODE_LENGTH; i++) {
-    code += chars[Math.floor(rand() * chars.length)];
+    code += VOUCHER_CODE_ALPHABET[Math.floor(rand() * VOUCHER_CODE_ALPHABET.length)];
   }
   return `${VOUCHER_CODE_PREFIX}${code}`;
 }

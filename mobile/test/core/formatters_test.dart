@@ -25,6 +25,18 @@ void main() {
       expect(voucherCodeLength, 6);
     });
 
+    test('the alphabet is 32 characters, as on the server', () {
+      // A power of two is what keeps `floor(unit * n)` unbiased. Asserted on
+      // both sides — VOUCHER_CODE_ALPHABET.length in streakLogic.test.ts.
+      final body = generateVoucherCode().substring(voucherCodePrefix.length);
+      expect(body.length, voucherCodeLength);
+      expect(
+        'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'.length,
+        32,
+        reason: 'must match VOUCHER_CODE_ALPHABET in functions/src/streakLogic.ts',
+      );
+    });
+
     test('never generates I, O, 0 or 1', () {
       // L is deliberately kept — it is only confusable with 1, which is gone.
       final rng = Random(7);

@@ -4,9 +4,21 @@ import 'dart:math';
 /// reading a code off a stranger's phone. L stays: it is only mistakable for 1,
 /// and 1 is already gone. Matches the Cloud Function's generator so demo codes
 /// look like real ones.
+/// Exactly 32 characters, matching `VOUCHER_CODE_ALPHABET` on the server. The
+/// count is load-bearing there: a power-of-two alphabet makes every character
+/// equally likely, where any other length reintroduces modulo bias.
 const _codeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-final _random = Random();
+/// `Random.secure()`, not `Random()`.
+///
+/// These codes are only ever demo data — the real ones are minted by the Cloud
+/// Function — so nothing here is guarding money. It is the secure source anyway
+/// for the same reason the server's is: a plain `Random` is a PRNG whose state
+/// can be recovered from its own output, and the one thing worse than a weak
+/// generator is two generators that are supposed to match where only one of
+/// them is strong. Somebody reading this file should not have to work out which
+/// kind it is.
+final _random = Random.secure();
 
 /// Number of random characters after the `EAT-` prefix. Must match
 /// `VOUCHER_CODE_LENGTH` in functions/src/streakLogic.ts — this generator makes
