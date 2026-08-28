@@ -87,7 +87,11 @@ comes from Firestore rules and Cloud Functions, not from hiding them.
    ```
 
    Add the release keystore's fingerprints too once you have one, plus Play's
-   app-signing key after the first upload (see `RELEASE_CHECKLIST.md`).
+   app-signing key after the first upload. With Play App Signing (the default)
+   Google re-signs your upload, so the fingerprint that matters for
+   `assetlinks.json` is **Play's**, not your keystore's — taking it from the
+   local keystore is the usual mistake, and App Links then silently never
+   verify. `tool/preflight.py` checks the format and says where to find it.
 
 ## 4. Enable Apple sign-in (iOS)
 

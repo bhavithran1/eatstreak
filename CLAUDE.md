@@ -237,7 +237,23 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
 firebase deploy --only functions,firestore:rules,firestore:indexes,hosting
 ```
 
-Console steps that no deploy performs, and that silently no-op until done:
+Check what is actually ready first — it reads the working tree and needs no
+credentials:
+
+```bash
+python3 tool/preflight.py
+```
+
+It fails (exit 1) only on things that would ship something *wrong*: demo data in
+a live build, a missing Firebase key, `APP_CHECK=false` committed, the
+`eatstreak://` scheme gone. Store-release gaps are reported but do not fail it,
+because they block a store release and not a deploy; `--store` makes them fail
+too (exit 2). It exists because the placeholders here are the sort nobody
+notices — `REPLACE_WITH_APPLE_TEAM_ID` sat in a file Hosting serves to every
+iPhone and nothing failed, the app simply never opened from a scanned code.
+
+Console steps that no deploy performs, and that silently no-op until done
+(`preflight.py` prints these too, with the exact console path for each):
 
 - **TTL policy** on collection group `checkInTokens`, field `ttlAt`.
 - **App Check enforcement stays OFF** until tokens are visibly arriving in the console.
