@@ -6,20 +6,33 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/dates.dart';
 import '../../core/utils/formatters.dart';
+import '../../domain/owner_analytics.dart';
 import '../../state/store_controller.dart';
 import '../shared/widgets/app_screen.dart';
 import '../shared/widgets/empty_state.dart';
 import '../shared/widgets/store_scope.dart';
 
-/// How a customer is doing against the shop's return window.
-enum CustomerStatus {
-  active('Active', AppColors.success),
-  atRisk('At risk', AppColors.warning),
-  lapsed('Lapsed', AppColors.error);
+/// How this screen paints a [CustomerStanding].
+///
+/// The standing itself is decided in `domain/owner_analytics.dart`, so the
+/// dashboard's "3 streaks end within a day" and this screen's "At risk" filter
+/// are the same set of people. They used to be two definitions: this screen
+/// called anyone who had not visited *today* at risk, which on a three-day
+/// window is most of a healthy customer base — the filter selected nearly
+/// everyone and so pointed at nobody, while the dashboard counted only those
+/// already lost.
+extension StandingStyle on CustomerStanding {
+  String get label => switch (this) {
+        CustomerStanding.active => 'Active',
+        CustomerStanding.atRisk => 'At risk',
+        CustomerStanding.lapsed => 'Lapsed',
+      };
 
-  const CustomerStatus(this.label, this.color);
-  final String label;
-  final Color color;
+  Color get color => switch (this) {
+        CustomerStanding.active => AppColors.success,
+        CustomerStanding.atRisk => AppColors.warning,
+        CustomerStanding.lapsed => AppColors.error,
+      };
 }
 
 typedef _Row = ({
@@ -28,14 +41,15 @@ typedef _Row = ({
   int currentStreak,
   int totalVisits,
   String lastVisit,
-  CustomerStatus status,
+  int daysLeft,
+  CustomerStanding status,
 });
 
 class CustomersScreen extends ConsumerStatefulWidget {
   const CustomersScreen({super.key, this.initialStatus});
 
-  /// Set when the dashboard's lapsed banner deep-links into this screen.
-  final CustomerStatus? initialStatus;
+  /// Set when one of the dashboard's banners deep-links into this screen.
+  final CustomerStanding? initialStatus;
 
   @override
   ConsumerState<CustomersScreen> createState() => _CustomersScreenState();
@@ -44,7 +58,7 @@ class CustomersScreen extends ConsumerStatefulWidget {
 class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   final _searchController = TextEditingController();
   String _search = '';
-  CustomerStatus? _filter;
+  CustomerStanding? _filter;
 
   @override
   void initState() {
@@ -69,12 +83,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
     final rows = <_Row>[];
     if (shop != null) {
       for (final streak in state.streaks.where((s) => s.shopId == shop.id)) {
-        final daysSince = daysBetween(streak.lastVisitDate, today);
-        final status = daysSince > shop.streakWindowDays
-            ? CustomerStatus.lapsed
-            : daysSince > 0
-                ? CustomerStatus.atRisk
-                : CustomerStatus.active;
+        final status = standingOf(streak, shop.streakWindowDays, today);
 
         // userName is denormalized onto the streak by the Cloud Function, so
         // owners can show names without reading other users' documents.
@@ -88,6 +97,7 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
           currentStreak: streak.currentStreakDays,
           totalVisits: streak.totalVisits,
           lastVisit: streak.lastVisitDate,
+          daysLeft: daysUntilExpiry(streak.lastVisitDate, shop.streakWindowDays),
           status: status,
         ));
       }
@@ -98,7 +108,15 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
         .where((c) => _filter == null || c.status == _filter)
         .where((c) => query.isEmpty || c.name.toLowerCase().contains(query))
         .toList()
-      ..sort((a, b) => b.currentStreak.compareTo(a.currentStreak));
+      // At risk first, then active, then lapsed; longest streak within each.
+      // Sorting by streak length alone buried the customers the owner can
+      // still do something about underneath the ones who are already fine.
+      ..sort((a, b) {
+        final byStatus = _sortRank(a.status).compareTo(_sortRank(b.status));
+        return byStatus != 0
+            ? byStatus
+            : b.currentStreak.compareTo(a.currentStreak);
+      });
 
     return AppScreen(
       title: 'Customers',
@@ -171,14 +189,14 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
   Widget _filters() => Row(
         children: [
           Expanded(child: _chip(null, 'All')),
-          for (final status in CustomerStatus.values) ...[
+          for (final status in CustomerStanding.values) ...[
             const SizedBox(width: 7),
             Expanded(child: _chip(status, status.label)),
           ],
         ],
       );
 
-  Widget _chip(CustomerStatus? status, String label) {
+  Widget _chip(CustomerStanding? status, String label) {
     final selected = _filter == status;
 
     return GestureDetector(
@@ -195,12 +213,16 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
             color: selected ? AppColors.primary : AppColors.line,
           ),
         ),
-        child: Text(
-          label,
-          style: AppText.body(
-            size: 11,
-            weight: FontWeight.w600,
-            color: selected ? AppColors.primaryInk : AppColors.muted,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            style: AppText.body(
+              size: 11,
+              weight: FontWeight.w600,
+              color: selected ? AppColors.primaryInk : AppColors.muted,
+            ),
           ),
         ),
       ),
@@ -242,17 +264,24 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                         ),
                       ),
                       const SizedBox(width: Spacing.sm),
-                      _statusBadge(c.status),
+                      Flexible(child: _statusBadge(c.status)),
                     ],
                   ),
                   const SizedBox(height: Spacing.xs),
-                  Row(
+                  // Wrap, not Row: both halves are numbers a busy shop grows —
+                  // a three-digit streak beside a four-digit visit count runs
+                  // off the side of a Row well before the largest text size,
+                  // and this pair overflowed by 68pt on a 402pt phone at the
+                  // *default* setting. Wrapping puts the second stat on its own
+                  // line instead of truncating either of them.
+                  Wrap(
+                    spacing: Spacing.md,
+                    runSpacing: Spacing.xs,
                     children: [
                       _inlineStat(
                         Icons.monitor_heart_outlined,
                         '${c.currentStreak} day streak',
                       ),
-                      const SizedBox(width: Spacing.md),
                       _inlineStat(
                         Icons.place_outlined,
                         '${c.totalVisits} visits',
@@ -261,8 +290,13 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
                   ),
                   const SizedBox(height: Spacing.xs),
                   Text(
-                    'Last visit: ${formatDate(c.lastVisit)}',
-                    style: AppText.body(size: 12, color: AppColors.muted2),
+                    _lastVisitLine(c),
+                    style: AppText.body(
+                      size: 12,
+                      color: c.status == CustomerStanding.atRisk
+                          ? AppColors.warning
+                          : AppColors.muted2,
+                    ),
                   ),
                 ],
               ),
@@ -271,7 +305,10 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
         ),
       );
 
-  Widget _statusBadge(CustomerStatus status) => Container(
+  /// The status pill. Sized to its label rather than a fixed width, and the
+  /// label ellipsises: it shares a line with a customer name that owners do
+  /// not choose and cannot shorten.
+  Widget _statusBadge(CustomerStanding status) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
           color: status.color.withValues(alpha: 0.12),
@@ -289,24 +326,60 @@ class _CustomersScreenState extends ConsumerState<CustomersScreen> {
               ),
             ),
             const SizedBox(width: Spacing.xs),
-            Text(
-              status.label,
-              style: AppText.body(
-                size: 11,
-                weight: FontWeight.w600,
-                color: status.color,
+            Flexible(
+              child: Text(
+                status.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.body(
+                  size: 11,
+                  weight: FontWeight.w600,
+                  color: status.color,
+                ),
               ),
             ),
           ],
         ),
       );
 
-  Widget _inlineStat(IconData icon, String text) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: AppColors.muted),
-          const SizedBox(width: Spacing.xs),
-          Text(text, style: AppText.body(size: 13, weight: FontWeight.w500)),
-        ],
+  /// When they were last in, and — for the ones still savable — how long the
+  /// owner has left to get them back through the door.
+  String _lastVisitLine(_Row c) => switch (c.status) {
+        CustomerStanding.atRisk when c.daysLeft == 0 =>
+          'Last day to keep the streak — last visit '
+              '${formatDate(c.lastVisit)}',
+        CustomerStanding.atRisk =>
+          'One day left — last visit ${formatDate(c.lastVisit)}',
+        _ => 'Last visit: ${formatDate(c.lastVisit)}',
+      };
+
+  /// An icon and its figure, as a single [Text] rather than a Row.
+  ///
+  /// A Row cannot wrap: inside the [Wrap] above it is handed the card's width
+  /// and overflows the moment the label needs one pixel more, which is what a
+  /// large text setting does. Carrying the icon as a [WidgetSpan] lets the
+  /// whole stat reflow like the text it is.
+  Widget _inlineStat(IconData icon, String text) => Text.rich(
+        TextSpan(
+          children: [
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.only(right: Spacing.xs),
+                child: Icon(icon, size: 14, color: AppColors.muted),
+              ),
+            ),
+            TextSpan(text: text),
+          ],
+        ),
+        style: AppText.body(size: 13, weight: FontWeight.w500),
       );
 }
+
+/// Order the list puts standings in: the savable before the safe, and the
+/// already-gone last.
+int _sortRank(CustomerStanding status) => switch (status) {
+      CustomerStanding.atRisk => 0,
+      CustomerStanding.active => 1,
+      CustomerStanding.lapsed => 2,
+    };

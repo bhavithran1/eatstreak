@@ -45,6 +45,54 @@ void main() {
           reason: 'but it must never be prefilled as a name');
     });
 
+    test('a structured payload never becomes a suggested name', () {
+      // Each of these is a QR a customer really does point the app at, and each
+      // would have passed the old "under 80 characters" rule. The vCard even
+      // contains the shop's real name — as one field of a payload, which is not
+      // the same thing as being one.
+      for (final raw in [
+        'BEGIN:VCARD\nVERSION:3.0\nFN:Warung Pak Cik\nTEL:+60123456789\nEND:VCARD',
+        'otpauth://totp/Warung:staff?secret=JBSWY3DPEHPK3PXP&issuer=Warung',
+        'tel:+60123456789',
+        'EATSTREAK:V1:VOUCHER:EAT-ABC123',
+      ]) {
+        expect(parseExternalQr(raw).extractedName, isNull, reason: raw);
+      }
+    });
+
+    test('a host borrowing ours is never offered as a restaurant', () {
+      // parseCheckInTarget already refuses to check anyone in here. The
+      // external branch then offered "Eatstreak" as the shop to add, lending a
+      // hostile code our own brand — found by the eatstreak_host_suffix_spoof
+      // fixture in tool/e2e/.
+      for (final hostile in [
+        'https://eatstreak.app.evil.example/c/shop_ramen?t=abc',
+        'https://eatstreak.evil.example/menu',
+        'https://EATSTREAK.co/menu',
+      ]) {
+        final parsed = parseExternalQr(hostile);
+        expect(parsed.type, ExternalQrType.url, reason: hostile);
+        expect(parsed.extractedName, isNull, reason: hostile);
+      }
+    });
+
+    test('an ordinary restaurant host is still offered', () {
+      // The suppression above must not swallow the normal case.
+      expect(parseExternalQr('https://warungpakcik.com.my/menu').extractedName,
+          'Warungpakcik');
+    });
+
+    test('a long tracking URL still gives up its host', () {
+      final parsed = parseExternalQr(
+        'https://order.foodpanda.my/restaurant/x9k2/warung-pak-cik'
+        '?utm_source=qr&utm_medium=table&utm_campaign=lunch2026'
+        '&utm_content=tent-card-a&session=7f3c9b1e2d4a',
+      );
+
+      expect(parsed.type, ExternalQrType.url);
+      expect(parsed.extractedName, 'Order');
+    });
+
     test('other machine payloads are not names either', () {
       for (final raw in [
         'BEGIN:VCARD\nFN:Ali\nEND:VCARD',
@@ -100,11 +148,41 @@ void main() {
       expect(parseCheckInTarget('https://evil.example.com/c/shop_ramen'), isNull);
     });
 
+    test('an upper-cased host is still ours', () {
+      // Some generators upper-case the whole payload to shrink the symbol.
+      // Hosts are case-insensitive and Uri normalises them; this pins that we
+      // rely on that rather than comparing the raw string.
+      final t = parseCheckInTarget('HTTPS://EATSTREAK.APP/c/shop_nonna?t=abc');
+
+      expect(t?.shopId, 'shop_nonna');
+      expect(t?.token, 'abc');
+    });
+
+    test('a host that merely starts or ends with ours is not ours', () {
+      // The check-in link is the only payload in this app that causes a write,
+      // so the host test has to be equality and not a prefix or substring
+      // match. Each of these passes a looser test and must fail this one.
+      for (final hostile in [
+        'https://eatstreak.app.evil.example/c/shop_ramen?t=abc',
+        'https://noteatstreak.app/c/shop_ramen?t=abc',
+        'https://eatstreak.app.co/c/shop_ramen?t=abc',
+        'https://evil.example/eatstreak.app/c/shop_ramen?t=abc',
+      ]) {
+        expect(parseCheckInTarget(hostile), isNull, reason: hostile);
+      }
+    });
+
     test('the external fixtures are not check-in codes', () {
       for (final raw in [
         'https://menu.warungpakcik.com.my/table/12',
+        'https://www.google.com/maps/place/Restoran+Nasi+Kandar+Pelita/@3.15,101.7,17z',
         'upi://pay?pa=warung@maybank&pn=Warung%20Pak%20Cik&cu=MYR',
         'WIFI:S:WarungPakCik_Guest;T:WPA;P:makanlah123;;',
+        'BEGIN:VCARD\nVERSION:3.0\nFN:Warung Pak Cik\nEND:VCARD',
+        'otpauth://totp/Warung:staff?secret=JBSWY3DPEHPK3PXP&issuer=Warung',
+        'tel:+60123456789',
+        'Warung Pak Cik',
+        'https://order.foodpanda.my/restaurant/x9k2/warung-pak-cik?utm_source=qr',
         '   ',
       ]) {
         expect(parseCheckInTarget(raw), isNull, reason: raw);

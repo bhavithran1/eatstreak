@@ -1,7 +1,14 @@
+import 'package:eatstreak/core/utils/dates.dart';
 import 'package:eatstreak/data/models/enums.dart';
+import 'package:eatstreak/data/models/shop.dart';
+import 'package:eatstreak/data/models/streak.dart';
+import 'package:eatstreak/data/models/user.dart';
+import 'package:eatstreak/data/models/visit.dart';
 import 'package:eatstreak/data/models/voucher.dart';
 import 'package:eatstreak/features/customer/show_voucher_screen.dart';
 import 'package:eatstreak/features/owner/counter_code_screen.dart';
+import 'package:eatstreak/features/owner/customers_screen.dart';
+import 'package:eatstreak/features/owner/dashboard_screen.dart';
 import 'package:eatstreak/features/shared/widgets/store_scope.dart';
 import 'package:eatstreak/features/shared/widgets/voucher_card.dart';
 import 'package:eatstreak/state/store_controller.dart';
@@ -41,8 +48,9 @@ void main() {
     WidgetTester tester,
     Size size,
     double textScale,
-    Widget child,
-  ) async {
+    Widget child, {
+    StoreController Function()? store,
+  }) async {
     tester.view
       ..physicalSize = size * 3
       ..devicePixelRatio = 3;
@@ -51,7 +59,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          storeControllerProvider.overrideWith(_FailingStore.new),
+          storeControllerProvider.overrideWith(store ?? _FailingStore.new),
         ],
         child: MaterialApp(
           home: MediaQuery(
@@ -69,11 +77,21 @@ void main() {
 
   /// Every combination of [sizes] and [textScales], each its own test so a
   /// failure names the phone and the setting it happened on.
-  void stress(String label, Widget Function() build) {
+  void stress(
+    String label,
+    Widget Function() build, {
+    StoreController Function()? store,
+  }) {
     for (final entry in sizes.entries) {
       for (final scale in textScales) {
         testWidgets('$label fits on ${entry.key} at ${scale}x', (tester) async {
-          await pumpAt(tester, entry.value, scale, build());
+          await pumpAt(
+            tester,
+            entry.value,
+            scale,
+            build(),
+            store: store,
+          );
 
           expect(tester.takeException(), isNull);
         });
@@ -94,6 +112,115 @@ void main() {
   // The real failure screen, not a hand-built copy of it: what has to survive
   // large text is the frame StoreScope actually renders, Retry button included.
   stress('the store failure screen', () => StoreScope(builder: (_, _) => _unused));
+
+  // The owner's two data-heavy screens, against a shop with real numbers in it.
+  //
+  // Neither was covered here before, and both were built the way the counter
+  // sheet was: fixed pixel boxes around text an owner can enlarge. The segment
+  // rows gave "Regulars (30+ days)" a 124pt box and its count a 24pt one, and
+  // the three KPI tiles split the width of the narrowest phone three ways for a
+  // numeral that grows with the text setting. A four-figure day would not fit
+  // at any accessibility size.
+  //
+  // The numbers below are deliberately awkward: a long shop name, a four-digit
+  // visit count, a three-digit customer count and a long customer name are all
+  // things a real shop produces and a designer's sample data does not.
+  stress(
+    'the owner dashboard',
+    DashboardScreen.new,
+    store: _BusyShopStore.new,
+  );
+  stress(
+    'the customers list',
+    CustomersScreen.new,
+    store: _BusyShopStore.new,
+  );
+}
+
+/// A shop doing enough trade to stress every figure on the dashboard at once.
+class _BusyShopStore extends StoreController {
+  @override
+  Future<StoreState> build() async => _busyShop();
+}
+
+StoreState _busyShop() {
+  final today = todayString();
+  final now = DateTime.now();
+
+  return StoreState(
+    currentUser: const AppUser(
+      id: 'owner_1',
+      name: 'Owner',
+      email: 'owner@example.com',
+      role: UserRole.owner,
+      joinedAt: '2026-01-01',
+    ),
+    shops: [
+      Shop(
+        id: 'shop_a',
+        // Owners type their own names, and this one is longer than the header.
+        name: 'Sweet Rise Bakery & Coffee House (Bangsar South)',
+        ownerId: 'owner_1',
+        category: ShopCategory.bakery,
+        emoji: '🥐',
+        description: 'Artisan pastries and sourdough.',
+        address: '3 Flour Ct, Uptown',
+        rewardTiers: const [],
+        streakWindowDays: 3,
+        createdAt: '2026-08-01',
+      ),
+    ],
+    // A four-digit day, to prove the KPI tile scales its numeral rather than
+    // clipping it.
+    visits: [
+      for (var i = 0; i < 1200; i++)
+        Visit(
+          id: 'v$i',
+          userId: 'u${i % 130}',
+          shopId: 'shop_a',
+          timestamp: DateTime(now.year, now.month, now.day, 12)
+              .subtract(Duration(days: i % 21, minutes: i))
+              .toUtc()
+              .toIso8601String(),
+        ),
+    ],
+    streaks: [
+      for (var i = 0; i < 130; i++)
+        Streak(
+          id: 'u${i}_shop_a',
+          userId: 'u$i',
+          shopId: 'shop_a',
+          currentStreakDays: i % 44,
+          longestStreakDays: i % 44,
+          totalVisits: i + 1,
+          // Spread across active, at-risk and lapsed.
+          lastVisitDate: addDays(today, -(i % 6)),
+          streakStartDate: today,
+          isStreakAlive: true,
+          userName: i == 0
+              ? 'Maria-Fernanda Villanueva-Castellanos'
+              : 'Customer $i',
+        ),
+    ],
+    vouchers: [
+      for (var i = 0; i < 40; i++)
+        Voucher(
+          id: 'vo$i',
+          userId: 'u$i',
+          shopId: 'shop_a',
+          shopName: 'Sweet Rise Bakery & Coffee House (Bangsar South)',
+          shopEmoji: '🥐',
+          tierId: 't${i % 4}',
+          type: RewardType.visitCount,
+          discountPercent: 10 + (i % 4) * 10,
+          tierLabel: 'Regular',
+          earnedAt: '2026-08-01T00:00:00.000Z',
+          expiresAt: now.add(Duration(days: i % 12)).toUtc().toIso8601String(),
+          isRedeemed: i % 3 == 0,
+          code: 'EAT-ABC12$i',
+        ),
+    ],
+  );
 }
 
 const _args = CounterCodeArgs(
