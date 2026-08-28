@@ -136,8 +136,9 @@ Set `LINK_DOMAIN` in `env.json` to match, or leave it to default to
 `<FIREBASE_PROJECT_ID>.web.app`. Whatever the value, the QR encoder and the two
 platform claims must agree — a mismatch means codes that scan but don't open.
 
-Full steps in `RELEASE_CHECKLIST.md`, which also flags a bundle-ID mismatch you
-need to settle before any of this is registered with Apple or Google.
+`python3 ../tool/preflight.py` checks the encoder, the iOS claim and the Android
+claim against each other and says what is still unfilled. A mismatch here is
+silent — the code scans, and simply never opens the app.
 
 ## Shared with the rest of the repo
 
@@ -148,4 +149,4 @@ fallback page and link-association files. None of them are app-specific.
 ## Other docs here
 
 - `FIREBASE_SETUP.md` — console steps to stand up the real backend
-- `RELEASE_CHECKLIST.md` — everything between "it runs" and "it's on a store"
+- `../tool/preflight.py` — everything between "it runs" and "it's on a store"

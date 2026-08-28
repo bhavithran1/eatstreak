@@ -54,7 +54,8 @@ abstract final class Env {
   /// Domain baked into check-in QR codes. Defaults to the Firebase Hosting
   /// domain derived from the project id. The iOS Associated Domains
   /// entitlement and the Android App Links intent-filter must claim the same
-  /// host — see RELEASE_CHECKLIST.md.
+  /// host. `tool/preflight.py` checks all three against each other, because a
+  /// mismatch is silent: codes scan fine and simply never open the app.
   static const String _linkDomainOverride = String.fromEnvironment('LINK_DOMAIN');
   static String get linkDomain => _linkDomainOverride.isNotEmpty
       ? _linkDomainOverride
