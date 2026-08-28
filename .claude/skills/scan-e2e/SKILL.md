@@ -25,9 +25,39 @@ cd /Users/zalkky/Coding/eatstreak && python3 tool/e2e/run_scan_suite.py --udid <
 device.** They share one device and run in order, so once the first EatStreak
 code has checked in, every later run finds that shop already visited today and
 shows `already_visited_today` instead — correct behaviour, and easy to misread
-as the check-in having broken. `--reset` clears the demo world so the next run
-starts clean; it also clears the account, so onboard once afterwards (tap
-"Explore the demo", Skip, type a name, Continue as Customer).
+as the check-in having broken. `--reset` clears the demo world *and reseeds it
+already onboarded*, then goes straight on to run the suite.
+
+The reseed does not reimplement the demo world in Python. It reads
+`mobile/build/demo_world.json`, written by
+
+```bash
+cd mobile && flutter test tool/dump_demo_world_test.dart
+```
+
+which calls `DemoRepository.seed()` — the same call onboarding makes — and dumps
+what it persisted. Generate that file once; the runner tells you to if it is
+missing. Reimplementing the seed on the Python side would be one more pair of
+things that must agree and silently would not, which is the failure this repo
+has already been bitten by twice.
+
+`--reset --no-seed` is the old behaviour: clear it and onboard by hand. Keep it
+in mind, because **the hand path is not always available.** Onboarding needs a
+tap on the Flutter view, and synthetic taps do not always reach it — on this Mac
+they drive SpringBoard (an app icon launches, a long press opens its menu) and
+never arrive in the app, while *swipes* work fine. That is what the reseed is
+for: without it a `--reset` can strand the device at the sign-in screen with no
+way forward.
+
+**`killall cfprefsd` does not work here.** cfprefsd caches the app's plist, so a
+write from outside is invisible until it re-reads, and `xcrun simctl spawn
+<udid> killall -9 cfprefsd` is the documented way to force that. On this Mac it
+exits 2 (`killall` is not on the spawn PATH) and a full path gets launchd error
+111. `force_prefs_reread()` tries it and falls back to cycling the device, which
+always works — a stopped simulator has no daemon holding a cache. The per-fixture
+`inject()` does not need any of this: the app is terminated and relaunched
+between fixtures and that is enough, and rebooting 19 times would turn a
+two-minute suite into an hour.
 
 ## What it proves, and what it does not
 
@@ -62,6 +92,12 @@ copy edit.
   production-shaped code silently resolves as an external QR — the suite passes
   while testing the wrong branch. Both sides default to
   `eatstreak-prod.web.app`.
+- **`FIREBASE_PROJECT_ID` is set in `env.e2e.json`, and does not turn demo mode
+  off.** `Env.hasFirebaseConfig` needs an API key as well, and there is none, so
+  nothing initialises Firebase. It is there so `_checkInHosts` resolves the full
+  production set — the `.web.app` host **and** the `.firebaseapp.com` one
+  Firebase Hosting also serves. Without it only one of the two hosts a real
+  printed code can carry was ever exercised.
 - **Only one EatStreak bundle may be installed.** An older build under a
   different bundle id (`com.eatstreak.eatstreak` has turned up before) claims the
   same `eatstreak://` scheme, and iOS then picks between them arbitrarily — which
@@ -70,9 +106,14 @@ copy edit.
 
 ## How the payload gets in
 
-Written straight into the app container's own preferences plist, then cfprefsd
-is killed to force a re-read, then the app is launched. `consumeE2eScanPayload()`
-reads and clears it, and the router redirect sends the app to the scanner.
+Written straight into the app container's own preferences plist, then the app is
+terminated and launched. `consumeE2eScanPayload()` reads and clears it, and the
+router redirect sends the app to the scanner.
+
+The relaunch is what makes the new value visible; the `killall cfprefsd` step
+this used to rely on does not run on this Mac at all (see above) and the suite
+has been passing without it. Do not add it back as a *requirement* — check the
+value is actually read before believing any change to this path.
 
 Three mechanisms were tried. The two obvious ones do not work on iOS:
 
@@ -147,3 +188,17 @@ Add it to `fixtures()` in `tool/e2e/qr_fixtures.py` with an honest `why`, and
 add the same payload to `mobile/test/core/qr_codec_test.dart`. The unit test is
 what makes a regression fail in `flutter test` instead of only in a screenshot
 somebody has to remember to look at.
+
+`ShopNotFoundScreen` serves **two** branches — a code that isn't ours, and a
+real EatStreak code for a shop that is gone — so `external_qr` and
+`shop_not_found` fixtures produce the same screen. What separates them in a
+screenshot is the "We detected …" block and whether the name field is prefilled,
+which is exactly what several fixtures exist to check.
+
+Fixtures earn their keep by finding things. `eatstreak_host_suffix_spoof`
+(`https://<our-host>.evil.example/c/...`) confirmed the host test is equality
+rather than a prefix match — and then showed the external branch offering
+**"Eatstreak-prod"** as the name of a restaurant to add, handing a hostile code
+our own brand to wear. `_borrowsOurName` in `qr_codec.dart` now suppresses it,
+the same answer `_isMachinePayload` gives a wifi password: there is nothing
+trustworthy to prefill, and the customer can still type the real name.

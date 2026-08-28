@@ -93,6 +93,32 @@ List<Shop> _baseShops() => [
       ),
     ];
 
+/// The hours a bakery actually trades, as a repeating pattern: an early rush,
+/// a lull, a smaller lunch peak, a trickle through the afternoon.
+///
+/// The seed used to stamp every visit `T12:00:00Z`. That is 8pm in UTC+8, so
+/// the owner dashboard's busiest-hour chart reported that a bakery's entire
+/// trade happened in one hour of the evening — a chart that looks broken
+/// rather than quiet, off data that never had an hour in it to begin with.
+const _tradingHours = [7, 8, 8, 8, 9, 9, 10, 11, 12, 12, 13, 15, 16, 8, 9];
+
+/// A visit instant [daysAgo] days back at a plausible hour, stored the way the
+/// backend stores one: UTC, from `toIso8601String()`.
+///
+/// Built from a **local** wall clock and then converted, so the hour an owner
+/// sees on the dashboard is the hour a customer would have walked in. Writing
+/// the UTC hour directly, as this seed used to, silently shifts every visit by
+/// the device's offset.
+String _visitInstant(int daysAgo, int seed) {
+  final now = DateTime.now();
+  final hour = _tradingHours[seed % _tradingHours.length];
+  final minute = (seed * 17) % 60;
+  return DateTime(now.year, now.month, now.day, hour, minute)
+      .subtract(Duration(days: daysAgo))
+      .toUtc()
+      .toIso8601String();
+}
+
 /// Other customers at the demo user's own shop, so the owner screens have
 /// something real to render.
 const _regulars = [
@@ -205,10 +231,13 @@ DemoSeed buildDemoSeed({required String userName, required bool includeDemoUser}
         userName: userName,
         shopId: 'shop_masa',
         shopOwnerId: ownerOf('shop_masa'),
-        timestamp: '${dateNDaysAgo(5 - i)}T12:00:00Z',
+        timestamp: _visitInstant(5 - i, i * 5),
       ),
-    // Visit history at the owned shop, so the dashboard sparkline has a shape.
-    for (final r in _regulars)
+    // Visit history at the owned shop, so the dashboard's chart, weekday bars
+    // and busiest hour all have a shape. The hour varies per customer and per
+    // visit — with one fixed hour the "busiest times" card is a single spike
+    // and tells the owner nothing.
+    for (final (index, r) in _regulars.indexed)
       for (var i = 0; i < r.visits; i++)
         if (r.lastVisitDaysAgo + i <= 29)
           Visit(
@@ -217,7 +246,7 @@ DemoSeed buildDemoSeed({required String userName, required bool includeDemoUser}
             userName: r.name,
             shopId: demoOwnedShopId,
             shopOwnerId: demoUid,
-            timestamp: '${dateNDaysAgo(r.lastVisitDaysAgo + i)}T12:00:00Z',
+            timestamp: _visitInstant(r.lastVisitDaysAgo + i, index * 4 + i),
           ),
   ];
 
@@ -228,6 +257,14 @@ DemoSeed buildDemoSeed({required String userName, required bool includeDemoUser}
     _voucher('shop_blueroast', 'Blue Roast Coffee', '☕', 'v10', RewardType.visitCount, 20, 'Loyal Fan', 11, 19, true, ownerOf),
     _voucher('shop_blueroast', 'Blue Roast Coffee', '☕', 'v20', RewardType.visitCount, 30, 'VIP', 1, 29, false, ownerOf),
     _voucher('shop_blueroast', 'Blue Roast Coffee', '☕', 's14', RewardType.streakDays, 25, '14-Day Streak', 7, 23, false, ownerOf),
+    // Rewards the demo user's *own customers* hold at the shop they own.
+    // Without these the owner dashboard's reward card is four zeros and a
+    // dash, which reads as a broken screen rather than an empty programme —
+    // and the outstanding figure, which is the one that matters, has nothing
+    // to show at all. One is redeemed, one expires this week, one has room.
+    _ownerVoucher('demo_c1', 'v20', RewardType.visitCount, 30, 'VIP', 3, 21, false), // Priya
+    _ownerVoucher('demo_c2', 'v10', RewardType.visitCount, 20, 'Loyal Fan', 9, 4, false), // Tom
+    _ownerVoucher('demo_c4', 's7', RewardType.streakDays, 15, '7-Day Streak', 14, 16, true), // Jae-won
   ];
 
   return DemoSeed(
@@ -276,7 +313,7 @@ List<Visit> _generatedVisits(
           userName: userName,
           shopId: shopId,
           shopOwnerId: ownerOf(shopId),
-          timestamp: '${dateNDaysAgo(i)}T12:00:00Z',
+          timestamp: _visitInstant(i, i * 3),
         ),
     ];
 
@@ -308,5 +345,38 @@ Voucher _voucher(
       expiresAt: '${addDays(todayString(), expiresInDays)}T23:59:59Z',
       isRedeemed: redeemed,
       redeemedAt: redeemed ? '${dateNDaysAgo(5)}T14:00:00Z' : null,
+      code: generateVoucherCode(),
+    );
+
+
+/// A voucher held by one of the demo shop's *customers*, at the shop the demo
+/// user owns. The mirror image of [_voucher], which mints them for the demo
+/// user as a customer elsewhere: the owner dashboard reads vouchers by
+/// shopOwnerId, so only these reach it.
+Voucher _ownerVoucher(
+  String userId,
+  String tierSuffix,
+  RewardType type,
+  int discount,
+  String label,
+  int earnedDaysAgo,
+  int expiresInDays,
+  bool redeemed,
+) =>
+    Voucher(
+      id: 'voucher_${demoOwnedShopId}_${userId}_$tierSuffix',
+      userId: userId,
+      shopId: demoOwnedShopId,
+      shopOwnerId: demoUid,
+      shopName: 'Sweet Rise Bakery',
+      shopEmoji: '🥐',
+      tierId: '${demoOwnedShopId}_$tierSuffix',
+      type: type,
+      discountPercent: discount,
+      tierLabel: label,
+      earnedAt: '${dateNDaysAgo(earnedDaysAgo)}T02:00:00Z',
+      expiresAt: '${addDays(todayString(), expiresInDays)}T23:59:59Z',
+      isRedeemed: redeemed,
+      redeemedAt: redeemed ? '${dateNDaysAgo(5)}T06:00:00Z' : null,
       code: generateVoucherCode(),
     );

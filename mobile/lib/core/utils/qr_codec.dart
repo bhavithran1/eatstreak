@@ -232,5 +232,26 @@ String? _nameFromUrl(String url) {
   final parts = host.split('.');
   if (parts.length < 2) return null;
   final name = parts.first;
-  return name.isEmpty ? null : name[0].toUpperCase() + name.substring(1);
+  if (name.isEmpty || _borrowsOurName(name)) return null;
+  return name[0].toUpperCase() + name.substring(1);
+}
+
+/// Whether a host's first label is ours.
+///
+/// `parseCheckInTarget` already refuses to check anyone in at
+/// `eatstreak-prod.web.app.evil.example` — the host test is equality, not a
+/// prefix match, and there is a fixture and a unit test pinning that. But the
+/// external branch then read the first label of that host and offered
+/// **"Eatstreak-prod"** as the name of a restaurant to add, which hands a
+/// hostile code our own brand to wear and one tap later writes it into
+/// `shopSuggestions` as a real place.
+///
+/// There is no shop behind a code like that. Suppressing the name is the same
+/// answer `_isMachinePayload` gives to a wifi password: we have nothing
+/// trustworthy to prefill, and the customer can still type the real name.
+bool _borrowsOurName(String label) {
+  final lower = label.toLowerCase();
+  return _checkInHosts
+      .map((host) => host.split('.').first.toLowerCase())
+      .any((ours) => ours.isNotEmpty && ours == lower);
 }

@@ -119,6 +119,29 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
   because `state/providers.dart` depends on it and a demo build must not link the SDK —
   the Firebase implementation sits in its own file, imported only by the bootstrap. Add
   a named method per event rather than a generic `log()`.
+- **The owner's numbers are computed in `domain/owner_analytics.dart`, not in the
+  screen.** `OwnerAnalytics.of(...)` takes the shops, streaks, vouchers and visits the
+  store already holds and returns every figure the dashboard shows. It adds no query, no
+  index and no rule — which is also what bounds it: the store loads
+  `analyticsWindowDays` (30) of visits, so anything counted from visits is capped there.
+  Lifetime figures (`totalVisits`, `longestStreakDays`) come off the streak documents
+  instead. There is no TypeScript counterpart to keep in parity — the server decides
+  streaks and vouchers, this only reports what it wrote.
+- **Bucket a visit by parsing its instant, never by `timestamp.startsWith(day)`.**
+  `visit.timestamp` is the server's `toISOString()` — UTC. `todayString()` and
+  `dateNDaysAgo()` are the **device's** local day. Comparing them as strings put every
+  visit before 08:00 in UTC+8 into *yesterday*: a bakery's whole morning rush was missing
+  from "Visits today" while the server had already counted it and extended the streak.
+  Parse and `.toLocal()` first. Local means the device's zone, which for an owner standing
+  in their own shop is the shop's; the server stays authoritative for streaks either way.
+- **"At risk" means the window is closing, not that they skipped a day.** `standingOf`
+  in `owner_analytics.dart` is the single definition, used by both the dashboard banner
+  and the Customers filter. It used to be two: the Customers screen called anyone who had
+  not visited *today* at risk, which on a three-day window selects most of a healthy
+  customer base — a filter that points at everyone points at nobody. At risk is
+  `daysUntilExpiry <= atRiskLeadDays`, i.e. the streak dies today or tomorrow. Those are
+  the customers an owner can still do something about; the lapsed ones are a post-mortem,
+  which is why the at-risk banner sits above the lapsed one.
 - **Pricing must not appear in the app.** `subscription.dart` has
   `const showsPricingInApp = false` — Apple 3.1.1 requires IAP for digital subscriptions
   sold in-app. Owners subscribe on `public/billing/`. Do not "helpfully" add prices,
@@ -167,6 +190,14 @@ reach, and re-deriving it from the code tends to reproduce a bug we already fixe
   the real timestamp. The same slip pushed a voucher with an hour left into Expired,
   where it could not be shown at all. Vouchers expire at 23:59:59Z — 07:59 local — so
   the wrong answer landed every morning.
+- **The owner dashboard and Customers list are in the layout stress test too.** Both were
+  built the same way the counter sheet was — fixed pixel boxes around text an owner can
+  enlarge — and adding them found four separate overflows: a 124pt box holding "Regulars
+  (30+ days)", a `CrossAxisAlignment.stretch` Row inside a ListView asking every KPI tile
+  to be infinitely tall, an icon-and-figure Row that ran 68pt off a 402pt phone at the
+  *default* text size, and a "3-day window" pill that starved the shop name at 2.0x.
+  Numbers in that test are deliberately awkward — a four-digit day, a 130-customer book,
+  a name nobody would pick — because a real shop produces those and sample data does not.
 - Screens talk only to `EatStreakRepository`. Adding a data method means implementing it
   in **both** `DemoRepository` and `FirestoreRepository`.
 - **Nothing best-effort may be awaited before `runApp`.** `main()` awaits

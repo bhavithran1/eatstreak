@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../data/models/enums.dart';
 import '../../data/models/voucher.dart';
+import '../../domain/owner_analytics.dart';
 import '../../features/auth/onboarding_screen.dart';
 import '../../features/auth/sign_in_screen.dart';
 import '../../features/customer/check_in_screen.dart';
@@ -307,10 +308,14 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-CustomerStatus? _customerStatus(String? wire) => switch (wire) {
-      'active' => CustomerStatus.active,
-      'warning' => CustomerStatus.atRisk,
-      'lapsed' => CustomerStatus.lapsed,
+CustomerStanding? _customerStatus(String? wire) => switch (wire) {
+      'active' => CustomerStanding.active,
+      // 'warning' is the name the dashboard's banner used before the standing
+      // moved into the domain. Still accepted: these links are typed into
+      // context.go() calls, and a stale one should filter rather than silently
+      // show the whole book.
+      'at-risk' || 'warning' => CustomerStanding.atRisk,
+      'lapsed' => CustomerStanding.lapsed,
       _ => null,
     };
 

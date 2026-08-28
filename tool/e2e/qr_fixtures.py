@@ -16,6 +16,7 @@ simulator is missing is the lens.
 
 Usage:
     python3 tool/e2e/qr_fixtures.py --out <dir> [--link-domain <host>] [--shop <id>]
+                                    [--project <firebase-project-id>]
 
 Writes <dir>/*.png plus <dir>/manifest.json, and exits non-zero if any fixture
 fails to decode back to its source string.
@@ -39,8 +40,14 @@ DEFAULT_LINK_DOMAIN = "eatstreak-prod.web.app"
 # it to a real shop instead of the not-found branch.
 DEFAULT_SHOP = "shop_ramen"
 
+# Firebase Hosting serves each site on <project>.web.app *and*
+# <project>.firebaseapp.com, and qr_codec.dart's _checkInHosts accepts both.
+# Kept in step with FIREBASE_PROJECT_ID in tool/e2e/env.e2e.json — the app only
+# resolves the second host when the build knows its project id.
+DEFAULT_PROJECT = "eatstreak-prod"
 
-def fixtures(link_domain: str, shop: str) -> list[dict]:
+
+def fixtures(link_domain: str, shop: str, project: str) -> list[dict]:
     """Every payload the scanner has to survive, and where each should land.
 
     `expect` is the branch scanner_screen._route() should take — the thing to
@@ -101,6 +108,53 @@ def fixtures(link_domain: str, shop: str) -> list[dict]:
             "expect": "shop_not_found",
             "why": "A real EatStreak code for a shop that is gone.",
         },
+        {
+            "name": "eatstreak_firebaseapp_host",
+            "payload": f"https://{project}.firebaseapp.com/c/shop_masa?t=demo_shop_masa_TESTTOKEN",
+            "expect": "check_in",
+            "why": (
+                "Firebase Hosting serves every site on BOTH <project>.web.app and "
+                "<project>.firebaseapp.com, and a code printed from either host is a "
+                "real code. _checkInHosts accepts both; only one of them had ever "
+                "been exercised here. A different shop, so it is a genuine check-in "
+                "rather than a repeat."
+            ),
+        },
+        {
+            "name": "eatstreak_uppercase_host",
+            "payload": f"https://{link_domain.upper()}/c/shop_nonna?t=demo_shop_nonna_TESTTOKEN",
+            "expect": "check_in",
+            "why": (
+                "Hosts are case-insensitive and some QR generators upper-case the "
+                "whole payload to shrink the symbol. Uri normalises the host; this "
+                "pins that we rely on it."
+            ),
+        },
+        {
+            "name": "eatstreak_host_suffix_spoof",
+            "payload": f"https://{link_domain}.evil.example/c/{shop}?t={token}",
+            "expect": "external_qr",
+            "why": (
+                "A hostile code whose host merely *starts* with ours. If the host "
+                "test were a prefix or substring match instead of an equality one, "
+                "this would check the customer in at somebody else's say-so — and "
+                "the check-in link is the one payload in this app that causes a "
+                "write. It must land on the external branch, not the check-in one."
+            ),
+        },
+        # ---- our own voucher code, pointed at the wrong scanner ------------
+        {
+            "name": "eatstreak_own_voucher",
+            "payload": "EATSTREAK:V1:VOUCHER:EAT-ABC123",
+            "expect": "external_qr, and NO name prefilled in the suggestion form",
+            "why": (
+                "A customer scanning their own voucher with the customer scanner. "
+                "It is the only other code in this app, so this is a normal "
+                "mistake. Before _isMachinePayload listed the voucher prefix, the "
+                "app offered 'EATSTREAK:V1:VOUCHER:EAT-ABC123' as the name of a "
+                "restaurant to add — the wifi bug in our own payload."
+            ),
+        },
         # ---- Real-world codes a customer will point the app at ------------
         {
             "name": "menu_url",
@@ -125,6 +179,59 @@ def fixtures(link_domain: str, shop: str) -> list[dict]:
             "payload": "WIFI:S:WarungPakCik_Guest;T:WPA;P:makanlah123;;",
             "expect": "external_qr",
             "why": "Not a URL at all. Must not crash or be mistaken for a shop link.",
+        },
+        {
+            "name": "vcard_contact",
+            "payload": (
+                "BEGIN:VCARD\nVERSION:3.0\nFN:Warung Pak Cik\n"
+                "TEL:+60123456789\nEND:VCARD"
+            ),
+            "expect": "external_qr, and NO name prefilled",
+            "why": (
+                "The owner's contact card on the shopfront. It *does* contain the "
+                "shop name, but as one field of a structured payload — offering the "
+                "whole vCard as a name is what the 80-character rule used to do."
+            ),
+        },
+        {
+            "name": "otpauth_seed",
+            "payload": "otpauth://totp/Warung:staff?secret=JBSWY3DPEHPK3PXP&issuer=Warung",
+            "expect": "external_qr, and NO name prefilled",
+            "why": (
+                "A 2FA enrolment code left on a back-office noticeboard. The payload "
+                "is a shared secret; it must never be copied into a shopSuggestions "
+                "document, which is exactly what prefilling it as a name would do."
+            ),
+        },
+        {
+            "name": "tel_number",
+            "payload": "tel:+60123456789",
+            "expect": "external_qr, and NO name prefilled",
+            "why": "A takeaway flyer's call-us code. A phone number is not a name.",
+        },
+        {
+            "name": "plain_shop_name",
+            "payload": "Warung Pak Cik",
+            "expect": "external_qr, name prefilled as 'Warung Pak Cik'",
+            "why": (
+                "The path that is supposed to work: a hand-made code with nothing "
+                "but the shop's name in it. Every fixture above proves we reject a "
+                "name; this one proves we still accept one."
+            ),
+        },
+        {
+            "name": "long_tracking_url",
+            "payload": (
+                "https://order.foodpanda.my/restaurant/x9k2/warung-pak-cik"
+                "?utm_source=qr&utm_medium=table&utm_campaign=lunch2026"
+                "&utm_content=tent-card-a&session=7f3c9b1e2d4a"
+            ),
+            "expect": "external_qr, name prefilled from the host",
+            "why": (
+                "A delivery-aggregator code with a long query string. Length is what "
+                "pushes a QR into a denser symbol, so it is also the fixture most "
+                "likely to stop decoding if the encoder settings drift."
+            ),
         },
         {
             "name": "empty_ish_text",
@@ -162,10 +269,11 @@ def main() -> int:
     ap.add_argument("--out", required=True, type=pathlib.Path)
     ap.add_argument("--link-domain", default=DEFAULT_LINK_DOMAIN)
     ap.add_argument("--shop", default=DEFAULT_SHOP)
+    ap.add_argument("--project", default=DEFAULT_PROJECT)
     args = ap.parse_args()
 
     args.out.mkdir(parents=True, exist_ok=True)
-    entries = fixtures(args.link_domain, args.shop)
+    entries = fixtures(args.link_domain, args.shop, args.project)
 
     failures = 0
     for f in entries:

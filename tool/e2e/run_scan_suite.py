@@ -38,6 +38,7 @@ import cv2
 BUNDLE_ID = "com.eatstreak.app"
 PREF_KEY = "flutter.e2e_scan_payload"
 HERE = pathlib.Path(__file__).resolve().parent
+REPO = HERE.parent.parent
 
 
 def sh(*args: str, check: bool = True) -> str:
@@ -104,8 +105,8 @@ def reset_demo_world(udid: str) -> None:
 
     Dropping the store also drops the demo user document, and the app treats a
     missing user as not-yet-onboarded (see buildDemoSeed's `includeDemoUser`),
-    so onboarding has to be walked through once afterwards. That is why this is
-    opt-in rather than automatic.
+    so the device is left at the sign-in screen. [seed_onboarded] puts it back
+    without anyone tapping through onboarding.
     """
     plist = container(udid) / "Library/Preferences" / f"{BUNDLE_ID}.plist"
     if not plist.exists():
@@ -115,7 +116,63 @@ def reset_demo_world(udid: str) -> None:
     for key in ("flutter.eatstreak.demo.v1", "flutter.eatstreak.demo.session"):
         data.pop(key, None)
     plist.write_bytes(plistlib.dumps(data))
-    sh("xcrun", "simctl", "spawn", udid, "killall", "-9", "cfprefsd", check=False)
+    force_prefs_reread(udid)
+
+
+def force_prefs_reread(udid: str) -> None:
+    """Make cfprefsd drop its cache of the app's plist.
+
+    It caches the file, so a write from outside is invisible until it re-reads.
+    `simctl spawn <udid> killall …` is the documented trick and **does not work
+    on every host** — on this Mac it exits 2 (`killall` is not on the spawn
+    PATH) and a bare path gets launchd error 111. It is left in because it works
+    where it works, and the shutdown below is the fallback that always does:
+    a stopped device has no daemon holding a cache at all.
+
+    Only used around reset and seeding. The per-fixture [inject] does not need
+    it — the app is terminated and relaunched between fixtures, which is enough
+    in practice, and rebooting the device 19 times would make a 2-minute suite
+    take an hour.
+    """
+    out = sh("xcrun", "simctl", "spawn", udid, "killall", "-9", "cfprefsd", check=False)
+    if "error" not in out.lower():
+        return
+    print("  cfprefsd could not be signalled; cycling the device instead")
+    sh("xcrun", "simctl", "shutdown", udid, check=False)
+    time.sleep(4)
+    sh("xcrun", "simctl", "boot", udid, check=False)
+    sh("xcrun", "simctl", "bootstatus", udid, "-b", check=False)
+
+
+def seed_onboarded(udid: str) -> None:
+    """Put an already-onboarded demo world on the device, without tapping.
+
+    The world is not written here. It comes from `DemoRepository.seed()` — the
+    same call the app makes when onboarding finishes — dumped to JSON by
+    `mobile/tool/dump_demo_world_test.dart`. Reimplementing the seed in Python
+    would be one more pair of things that must agree and silently would not,
+    which is the failure mode this repo has been bitten by twice.
+
+    Why it exists: `--reset` used to leave the device at the sign-in screen with
+    the instruction to onboard by hand. That is fine until the host cannot
+    deliver a synthetic tap to the Flutter view — which happens — and then the
+    harness is simply stuck with no way forward.
+    """
+    world = REPO / "mobile/build/demo_world.json"
+    if not world.exists():
+        raise SystemExit(
+            "No demo world to seed. Generate it from the app's own seed first:\n"
+            "  cd mobile && flutter test tool/dump_demo_world_test.dart\n"
+            f"It writes {world}."
+        )
+
+    sh("xcrun", "simctl", "terminate", udid, BUNDLE_ID, check=False)
+    plist = container(udid) / "Library/Preferences" / f"{BUNDLE_ID}.plist"
+    data = plistlib.loads(plist.read_bytes()) if plist.exists() else {}
+    data["flutter.eatstreak.demo.v1"] = world.read_text()
+    data["flutter.eatstreak.demo.session"] = True
+    plist.write_bytes(plistlib.dumps(data))
+    force_prefs_reread(udid)
 
 
 def inject(udid: str, payload: str) -> None:
@@ -166,8 +223,13 @@ def main() -> int:
     ap.add_argument("--only", help="run just this fixture name")
     ap.add_argument(
         "--reset", action="store_true",
-        help="wipe the demo world first, so check-in fixtures start from a fresh "
-             "seed (you will have to onboard once more afterwards)",
+        help="wipe the demo world and reseed it onboarded, so check-in fixtures "
+             "start from a fresh seed",
+    )
+    ap.add_argument(
+        "--no-seed", action="store_true",
+        help="with --reset, leave the device signed out instead of reseeding it "
+             "(the old behaviour: you then onboard by hand)",
     )
     # Long enough for a cold start plus routing. Note that a *toast* has usually
     # faded by the time the shot is taken, so an `already_visited_today` fixture
@@ -181,9 +243,12 @@ def main() -> int:
 
     if args.reset:
         reset_demo_world(args.udid)
-        print("Demo world cleared. Launch the app, tap 'Explore the demo' and "
-              "onboard as a Customer, then run again.\n")
-        return 0
+        if args.no_seed:
+            print("Demo world cleared. Launch the app, tap 'Explore the demo' "
+                  "and onboard as a Customer, then run again.\n")
+            return 0
+        seed_onboarded(args.udid)
+        print("Demo world cleared and reseeded, onboarded as a Customer.\n")
 
     assert_signed_in(args.udid)
 
