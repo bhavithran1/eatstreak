@@ -481,27 +481,23 @@ class DashboardScreen extends ConsumerWidget {
 
   // ---- cards ---------------------------------------------------------------
 
-  Widget _visitsCard(OwnerAnalytics a) {
-    final peak = a.dailyVisits.isEmpty
-        ? 0
-        : a.dailyVisits.reduce((x, y) => x > y ? x : y);
-
-    return _card(
-      'Visits (30 days)',
-      // The chart is deliberately axis-free — it answers "are we trending up"
-      // at a glance — but with no scale at all a peak of 3 and a peak of 300
-      // draw the same picture. The caption is the scale.
-      caption: '${a.visitsInWindow} total · busiest day $peak',
-      children: [
-        VisitsSparkline(counts: a.dailyVisits),
-        const SizedBox(height: Spacing.sm),
-        Text(
-          _trendSentence(a),
-          style: AppText.body(size: 12, color: AppColors.muted2),
-        ),
-      ],
-    );
-  }
+  Widget _visitsCard(OwnerAnalytics a) => _card(
+        'Visits (30 days)',
+        // The chart is deliberately axis-free — it answers "are we trending
+        // up" at a glance — but with no scale at all a peak of 3 and a peak of
+        // 300 draw the same picture. The caption is the scale. Both halves are
+        // counts, so both are worded as counts: "busiest day 5" read like a
+        // date.
+        caption: '${a.visitsInWindow} visits · best day ${a.busiestDayVisits}',
+        children: [
+          VisitsSparkline(counts: a.dailyVisits),
+          const SizedBox(height: Spacing.sm),
+          Text(
+            _trendSentence(a),
+            style: AppText.body(size: 12, color: AppColors.muted2),
+          ),
+        ],
+      );
 
   String _trendSentence(OwnerAnalytics a) {
     final trend = a.trendPercent;
@@ -535,7 +531,7 @@ class DashboardScreen extends ConsumerWidget {
               ? 'Once customers start checking in, this shows which days and '
                   'hours to staff for.'
               : 'Your busiest hour is ${hourRangeLabel(hour!)}, and '
-                  '${weekdayFullLabel(weekday)}s are your busiest day. '
+                  '${weekdayFullLabel(weekday)} is your busiest day. '
                   "Counted in your phone's timezone.",
           style: AppText.body(size: 12, color: AppColors.muted2),
         ),
@@ -654,16 +650,21 @@ class DashboardScreen extends ConsumerWidget {
         '${a.vouchersExpiringSoon} expiring within $expiringSoonDays days.';
   }
 
-  Widget _segmentsCard(OwnerAnalytics a) => _card(
-        'Customer segments',
-        children: [
-          for (final seg in a.segments) ...[
-            _segmentRow(seg, a.totalCustomers),
-            if (seg.band != a.segments.last.band)
-              const SizedBox(height: Spacing.md),
-          ],
+  Widget _segmentsCard(OwnerAnalytics a) {
+    // Read once: `segments` builds its list on every call, and asking for it
+    // again inside the loop just to find the last band rebuilt it per row.
+    final segments = a.segments;
+
+    return _card(
+      'Customer segments',
+      children: [
+        for (final seg in segments) ...[
+          _segmentRow(seg, a.totalCustomers),
+          if (seg.band != segments.last.band) const SizedBox(height: Spacing.md),
         ],
-      );
+      ],
+    );
+  }
 
   /// One band of the customer base.
   ///

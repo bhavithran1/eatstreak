@@ -1,11 +1,17 @@
 /// Everything the owner dashboard reports, computed in one pass over the data
 /// the store already holds.
 ///
-/// This lives here rather than inside `dashboard_screen.build()` — where all of
-/// it used to — for two reasons. It ran on every rebuild, recomputing thirty
-/// `DateTime.now()` calls to draw one chart; and none of it was testable, so the
-/// numbers an owner makes staffing decisions from had never been asserted
-/// against a known set of visits.
+/// This lives here rather than inside `dashboard_screen.build()`, where all of
+/// it used to, because none of it was testable there — the numbers an owner
+/// makes staffing decisions from had never been asserted against a known set of
+/// visits, and one of them was wrong by most of a morning.
+///
+/// It is still called from `build()`, so it stays cheap deliberately: one pass
+/// over each list, and the visit loop does arithmetic on `DateTime`s rather
+/// than formatting a day string per visit. Formatting was the old approach and
+/// it cost a `DateFormat` call per visit per rebuild. Nothing here is memoised;
+/// at a month of visits it does not need to be, and a provider holding derived
+/// state would be one more thing to invalidate.
 ///
 /// **No new reads.** Every figure below is derived from the shops, streaks,
 /// vouchers and visits [StoreController] already loads, so adding a metric costs
@@ -122,37 +128,6 @@ class OwnerAnalytics {
     required this.startingCustomers,
   });
 
-  /// The zero state — a shop that has never been visited. Also what an owner
-  /// sees before their first customer, which is a real screen, not a fallback.
-  factory OwnerAnalytics.empty() => OwnerAnalytics(
-        visitsToday: 0,
-        visitsThisPeriod: 0,
-        visitsPreviousPeriod: 0,
-        visitsInWindow: 0,
-        dailyVisits: List<int>.filled(analyticsWindowDays, 0),
-        visitsByWeekday: List<int>.filled(DateTime.daysPerWeek, 0),
-        visitsByHour: List<int>.filled(Duration.hoursPerDay, 0),
-        uniqueVisitorsThisPeriod: 0,
-        totalCustomers: 0,
-        activeCustomers: 0,
-        atRiskCustomers: 0,
-        lapsedCustomers: 0,
-        newCustomersThisPeriod: 0,
-        repeatRatePercent: 0,
-        lifetimeVisits: 0,
-        longestActiveStreak: 0,
-        topCustomerName: null,
-        vouchersEarned: 0,
-        vouchersRedeemed: 0,
-        vouchersOutstanding: 0,
-        vouchersExpiringSoon: 0,
-        redemptionRatePercent: 0,
-        averageDiscountPercent: 0,
-        regularCustomers: 0,
-        growingCustomers: 0,
-        startingCustomers: 0,
-      );
-
   // ---- traffic -------------------------------------------------------------
 
   final int visitsToday;
@@ -263,6 +238,12 @@ class OwnerAnalytics {
   /// Busiest hour of the local day, 0–23. Null when nothing was recorded.
   int? get busiestHour => _peakIndex(visitsByHour);
 
+  /// The best single day in the window. The chart is deliberately axis-free,
+  /// so this is the only thing that gives it a scale — without it a peak of 3
+  /// and a peak of 300 draw exactly the same picture.
+  int get busiestDayVisits =>
+      dailyVisits.isEmpty ? 0 : dailyVisits.reduce((x, y) => x > y ? x : y);
+
   /// Average lifetime visits per customer, to one decimal.
   double get visitsPerCustomer =>
       totalCustomers == 0 ? 0 : lifetimeVisits / totalCustomers;
@@ -318,34 +299,43 @@ class OwnerAnalytics {
     final byWeekday = List<int>.filled(DateTime.daysPerWeek, 0);
     final byHour = List<int>.filled(Duration.hoursPerDay, 0);
 
-    // Index the window's days once, rather than formatting a date per visit
-    // per day. Oldest first, so `dayIndex[today]` is the last slot.
-    final dayIndex = <String, int>{};
-    for (var i = 0; i < analyticsWindowDays; i++) {
-      final day = addDays(today, -(analyticsWindowDays - 1 - i));
-      dayIndex[day] = i;
-    }
-
     final periodVisitors = <String, int>{};
     var visitsThisPeriod = 0;
     var visitsPreviousPeriod = 0;
+
+    // Midnight local on [today], the origin every visit is measured from.
+    final todayMidnight = DateTime.tryParse('${today}T00:00:00');
 
     for (final visit in shopVisits) {
       final at = DateTime.tryParse(visit.timestamp)?.toLocal();
       // A visit we cannot place in time is counted nowhere rather than
       // guessed into today — an inflated "visits today" is worse than a
       // missing one, because it is the number the owner trusts most.
-      if (at == null) continue;
+      if (at == null || todayMidnight == null) continue;
 
-      final day = toDateString(at);
-      final slot = dayIndex[day];
-      if (slot != null) {
-        dailyVisits[slot]++;
-        byWeekday[at.weekday - 1]++;
-        byHour[at.hour]++;
-      }
+      // Whole days back from today, measured between local midnights: 0 is
+      // today, 1 yesterday. Rounded from hours rather than taken from
+      // `inDays`, so a daylight-saving jump cannot shorten a day into 23
+      // hours and round it to zero.
+      //
+      // One number decides everything below — which column of the chart, which
+      // comparison period, whether it counts at all. It used to be two: a
+      // string day for the chart and `daysBetween` for the periods. Since
+      // `daysBetween` reports an *absolute* distance, a visit stamped in the
+      // future (a skewed clock, a device ahead of the server) measured as
+      // yesterday and landed in "This week" while the chart, which had no
+      // column for it, left it out. The two numbers on screen disagreed.
+      final age =
+          (todayMidnight.difference(DateTime(at.year, at.month, at.day)).inHours /
+                  24)
+              .round();
+      if (age < 0 || age >= analyticsWindowDays) continue;
 
-      final age = daysBetween(day, today);
+      // Oldest first, so today is the last column.
+      dailyVisits[analyticsWindowDays - 1 - age]++;
+      byWeekday[at.weekday - 1]++;
+      byHour[at.hour]++;
+
       if (age < comparisonPeriodDays) {
         visitsThisPeriod++;
         periodVisitors[visit.userId] = (periodVisitors[visit.userId] ?? 0) + 1;

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
 import plistlib
 import re
@@ -124,18 +125,35 @@ def check_env(env) -> dict | None:
     return env
 
 
+# Build output and vendored dependencies: nothing here is authored, and a
+# release .app alone is tens of megabytes. Pruned during the walk rather than
+# filtered after it — descending into them first took ten seconds, which is
+# long enough that nobody runs the check casually, which defeats the point.
+SKIP_DIRS = {
+    ".git", ".dart_tool", "node_modules", "build", "Pods", ".symlinks",
+    "DerivedData", "out", "lib-test", "ephemeral",
+}
+
+# Where a build flag could realistically hide. Markdown is deliberately absent:
+# CLAUDE.md and the ship skill both have to be able to write the flag down.
+CONFIG_SUFFIXES = {".json", ".sh", ".yml", ".yaml", ".plist", ".xcconfig"}
+
+
+def config_files():
+    """Every authored config file in the repo, build output pruned."""
+    for root, dirs, names in os.walk(REPO):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for name in names:
+            path = pathlib.Path(root) / name
+            if path.suffix in CONFIG_SUFFIXES:
+                yield path
+
+
 def check_app_check() -> None:
     """APP_CHECK=false must never ship, so it must never be committed."""
     offenders = []
-    for path in REPO.rglob("*"):
-        if not path.is_file():
-            continue
+    for path in config_files():
         rel = path.relative_to(REPO).as_posix()
-        if rel.startswith((".git/", "node_modules/", "mobile/build/",
-                           "functions/lib", "tool/e2e/out/")):
-            continue
-        if path.suffix not in {".json", ".sh", ".yml", ".yaml", ".plist"}:
-            continue
         if rel == "mobile/env.json":
             continue
         try:
@@ -171,6 +189,86 @@ def check_url_scheme(domain: str) -> None:
            "Safari, and the fallback page's button hands off via "
            f"{URL_SCHEME}://check-in/<shop>. Lose the scheme and that path "
            "dead-ends on a web page.")
+
+
+# Collections the backend owns outright. CLAUDE.md: streaks, visits, vouchers
+# and embers are written ONLY by Cloud Functions, and the rules are what makes
+# that true rather than a convention. A client write path here would let a
+# customer mint their own discount.
+SERVER_OWNED = ["streaks", "visits", "vouchers", "checkInTokens", "subscriptions"]
+
+
+def check_rules_deny_client_writes() -> None:
+    path = REPO / "firestore.rules"
+    try:
+        text = path.read_text()
+    except OSError as e:
+        record("BLOCKER", False, "Cannot read firestore.rules", str(e))
+        return
+
+    # Each `match /<name>/{...} { ... }` block, non-greedy to the next match.
+    blocks = dict(re.findall(
+        r"match\s+/(\w+)/\{[^}]*\}\s*\{(.*?)(?=\n\s*match\s|\n\s*\}\s*\n\s*\})",
+        text, re.S))
+
+    open_writes = []
+    for name in SERVER_OWNED:
+        body = blocks.get(name)
+        if body is None:
+            open_writes.append(f"{name} (no rule at all)")
+            continue
+        # Any write allowance whose condition is not a flat false.
+        for verbs, cond in re.findall(r"allow\s+([\w,\s]+):\s*if\s+([^;]+);", body):
+            if "write" not in verbs and "create" not in verbs and "update" not in verbs:
+                continue
+            if cond.strip() != "false":
+                open_writes.append(f"{name} ({verbs.strip()}: {cond.strip()[:40]})")
+
+    record("BLOCKER", not open_writes,
+           "Firestore denies client writes to server-owned collections",
+           "" if not open_writes else
+           "Writable by a client: " + "; ".join(open_writes) + "\n"
+           "Streaks, visits and vouchers are written only by Cloud Functions. "
+           "A client write path here lets a customer mint their own discount, "
+           "and no amount of app-side care compensates — the rules are the "
+           "only thing standing between a curl command and a free meal.")
+
+    catch_all = re.search(r"match\s+/\{document=\*\*\}\s*\{([^}]*)\}", text)
+    denied = bool(catch_all) and "if false" in catch_all.group(1)
+    record("BLOCKER", denied, "A catch-all rule denies everything else",
+           "" if denied else
+           "Without `match /{document=**} { allow read, write: if false; }` a "
+           "collection added later is unprotected until someone remembers to "
+           "write a rule for it.")
+
+
+def check_functions_region() -> None:
+    """The client and the backend must agree on where the callables live.
+
+    They are two literals in two languages with nothing tying them together,
+    and a mismatch is not subtle: every callable resolves to a region with
+    nothing deployed in it and fails, which the app reports as a network
+    problem. Firestore's own location is permanent and asia-southeast1.
+    """
+    env_dart = (REPO / "mobile/lib/core/config/env.dart").read_text()
+    index_ts = (REPO / "functions/src/index.ts").read_text()
+
+    client = re.search(r"functionsRegion\s*=\s*'([^']+)'", env_dart)
+    server = re.search(r"region:\s*'([^']+)'", index_ts)
+
+    if not client or not server:
+        record("BLOCKER", False, "Cannot find the callable region on both sides",
+               f"client={client and client.group(1)} "
+               f"server={server and server.group(1)}")
+        return
+
+    match = client.group(1) == server.group(1)
+    record("BLOCKER", match,
+           f"Client and functions agree on region ({client.group(1)})",
+           "" if match else
+           f"env.dart says {client.group(1)}, functions/src/index.ts says "
+           f"{server.group(1)}. Every callable would resolve to a region with "
+           "nothing deployed in it.")
 
 
 # ---- store readiness --------------------------------------------------------
@@ -414,6 +512,8 @@ def main() -> int:
 
     check_app_check()
     check_url_scheme(domain)
+    check_rules_deny_client_writes()
+    check_functions_region()
 
     check_aasa(domain)
     check_entitlement(domain)
