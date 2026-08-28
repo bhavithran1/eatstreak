@@ -242,6 +242,36 @@ def check_rules_deny_client_writes() -> None:
            "write a rule for it.")
 
 
+def check_no_weak_randomness() -> None:
+    """Nothing the backend mints may come out of `Math.random`.
+
+    Voucher codes did. V8 implements Math.random as xorshift128+, whose internal
+    state is recoverable from a run of outputs — and a voucher code is handed to
+    whoever earned it, so an attacker collects samples by visiting the shop and
+    reading their own. Predicting other customers' codes from there is a far
+    shorter path than guessing one, and the codes are worth money.
+
+    Test files are exempt: streakLogic.test.ts booby-traps Math.random to prove
+    the generator never reaches for it.
+    """
+    offenders = []
+    for path in sorted((REPO / "functions/src").rglob("*.ts")):
+        if path.name.endswith(".test.ts"):
+            continue
+        for n, line in enumerate(path.read_text().splitlines(), 1):
+            # The call, not a mention of it: the fix is documented in prose
+            # right above the function that replaced it.
+            if "Math.random(" in line:
+                offenders.append(f"{path.relative_to(REPO)}:{n}")
+
+    record("BLOCKER", not offenders, "No Math.random in backend source",
+           "" if not offenders else
+           "Found at: " + ", ".join(offenders) + "\n"
+           "Use `secureUnitInterval` in streakLogic.ts, or `randomBytes` "
+           "directly. If this is genuinely not a secret — a jitter, a sample "
+           "rate — say so here and exempt the line deliberately.")
+
+
 def check_functions_region() -> None:
     """The client and the backend must agree on where the callables live.
 
@@ -513,6 +543,7 @@ def main() -> int:
     check_app_check()
     check_url_scheme(domain)
     check_rules_deny_client_writes()
+    check_no_weak_randomness()
     check_functions_region()
 
     check_aasa(domain)

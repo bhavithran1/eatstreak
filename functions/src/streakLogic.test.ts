@@ -6,7 +6,8 @@
 import {
   computeCheckIn, qualifyingTiers, StreakCore, repairCost, repairInfo, applyRepair,
   toStreakCore,
-  generateVoucherCode, normalizeVoucherCode, VOUCHER_CODE_LENGTH, VOUCHER_CODE_PREFIX,
+  generateVoucherCode, secureUnitInterval, VOUCHER_CODE_ALPHABET,
+  normalizeVoucherCode, VOUCHER_CODE_LENGTH, VOUCHER_CODE_PREFIX,
 } from './streakLogic';
 import { toDateStringInTZ, addDays } from './dates';
 import { RewardTier } from './types';
@@ -305,6 +306,65 @@ const tiers: RewardTier[] = [
     normalizeVoucherCode('AB3KP8') === 'EAT-AB3KP9', false);
   eq('normalize: round-trips its own output',
     normalizeVoucherCode(normalizeVoucherCode('ab3 kp9')), 'EAT-AB3KP9');
+
+  // --- where the bits come from ---------------------------------------------
+  //
+  // A voucher is worth money, so its code has to be unpredictable and not
+  // merely random-looking. Math.random is xorshift128+: its state is
+  // recoverable from a run of outputs, and an attacker collects those simply by
+  // earning their own vouchers and reading the codes. These pin the source
+  // rather than the statistics, because a statistical test cannot tell a CSPRNG
+  // from a well-seeded PRNG — which is exactly the distinction that matters.
+  // Booby-trap Math.random and mint a code. If anyone puts it back as the
+  // default, this throws rather than quietly shipping predictable codes — the
+  // only way to assert the *source* rather than the statistics, and statistics
+  // cannot tell a CSPRNG from a well-seeded PRNG anyway.
+  {
+    const realRandom = Math.random;
+    Math.random = () => {
+      throw new Error('Math.random must never mint a voucher code');
+    };
+    try {
+      const minted = generateVoucherCode();
+      eq('minting a code never touches Math.random',
+        minted.startsWith(VOUCHER_CODE_PREFIX) &&
+          minted.length === VOUCHER_CODE_PREFIX.length + VOUCHER_CODE_LENGTH,
+        true);
+    } finally {
+      Math.random = realRandom;
+    }
+  }
+
+  eq('the alphabet is a power of two, so no character is favoured',
+    VOUCHER_CODE_ALPHABET.length, 32);
+
+  let outOfRange = 0;
+  const draws = new Set<number>();
+  for (let i = 0; i < 500; i++) {
+    const v = secureUnitInterval();
+    if (!(v >= 0 && v < 1)) outOfRange++;
+    draws.add(v);
+  }
+  eq('every draw lands in [0, 1)', outOfRange, 0);
+  eq('draws vary', draws.size > 400, true);
+
+  // A source stuck on a constant, or one with far too little state, shows up
+  // here long before it shows up as a fraud report.
+  const codes = new Set<string>();
+  const seenChars = new Set<string>();
+  for (let i = 0; i < 3000; i++) {
+    const c = generateVoucherCode();
+    codes.add(c);
+    for (const ch of c.slice(VOUCHER_CODE_PREFIX.length)) seenChars.add(ch);
+  }
+  // Not `=== 3000`. The code space is 32^6 ≈ 1.07e9, so 3000 draws expect
+  // 3000^2 / (2 * 32^6) ≈ 0.004 birthday collisions — this asserted exact
+  // uniqueness and failed roughly one run in 240, which teaches people to
+  // re-run a red suite. The slack is what the maths says it must be; a
+  // degenerate source collapses to a handful of distinct codes and still
+  // fails this by a mile.
+  eq('3000 codes are essentially all distinct', codes.size > 2990, true);
+  eq('every alphabet character can appear', seenChars.size, VOUCHER_CODE_ALPHABET.length);
 }
 
 // --- summary ----------------------------------------------------------------

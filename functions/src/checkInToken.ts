@@ -6,6 +6,8 @@
 // There is no per-scan consumption: the server already caps check-ins at one
 // per shop per day, so a code is only ever worth one visit to any one customer.
 
+import { timingSafeEqual } from 'crypto';
+
 import { CheckInTokenDoc } from './types';
 
 // Cleanup backstop only; validity is decided by the code's `date`, not by this.
@@ -36,6 +38,27 @@ export function newCheckInTokenDoc(
 }
 
 /**
+ * Compare two secrets without letting the comparison time say how much of the
+ * guess was right.
+ *
+ * `===` on strings stops at the first differing byte, so how long it takes is a
+ * function of the shared prefix. Over HTTPS, through a Cloud Function that may
+ * be cold-starting, that signal is buried in noise far larger than it — this is
+ * defence in depth, not a hole being closed. It costs two lines and removes the
+ * question, which is the right trade for the one comparison in this codebase
+ * that guards a secret.
+ *
+ * Unequal lengths return early: `timingSafeEqual` throws on a length mismatch,
+ * and a token's length is not the part worth hiding.
+ */
+function secretsMatch(stored: string, presented: string): boolean {
+  const a = Buffer.from(stored, 'utf8');
+  const b = Buffer.from(presented, 'utf8');
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+/**
  * Whether [presented] is the valid check-in code for [shopId] on [today].
  * Rejects a missing code, another shop's code, a different day's code, and any
  * secret that doesn't match exactly.
@@ -50,5 +73,5 @@ export function isCheckInTokenValid(
   if (doc.shopId !== shopId) return false;
   if (doc.date !== today) return false;
   if (!doc.secret || !presented) return false;
-  return doc.secret === presented;
+  return secretsMatch(doc.secret, presented);
 }
