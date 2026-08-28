@@ -112,7 +112,11 @@ class WeekdayBars extends StatelessWidget {
             child: Align(
               alignment: Alignment.bottomCenter,
               child: FractionallySizedBox(
-                heightFactor: fraction.clamp(0.04, 1.0),
+                // A floor keeps a small day visible; a day with no trade at
+                // all draws nothing. Flooring zero too would put a stub under
+                // a Sunday the shop was shut, which reads as "busy every day"
+                // to the glance this chart is for.
+                heightFactor: count == 0 ? 0.0 : fraction.clamp(0.04, 1.0),
                 child: Container(
                   decoration: BoxDecoration(
                     color: color,

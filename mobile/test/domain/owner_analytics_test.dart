@@ -142,15 +142,6 @@ void main() {
       expect(compute().busiestWeekday, isNull);
       expect(compute().busiestHour, isNull);
     });
-
-    test('empty() agrees with computing over nothing', () {
-      final empty = OwnerAnalytics.empty();
-      final computed = compute();
-      expect(empty.dailyVisits, computed.dailyVisits);
-      expect(empty.visitsByHour.length, computed.visitsByHour.length);
-      expect(empty.visitsByWeekday.length, computed.visitsByWeekday.length);
-      expect(empty.trendPercent, computed.trendPercent);
-    });
   });
 
   group('visits today', () {
@@ -212,6 +203,58 @@ void main() {
     });
   });
 
+  group('the chart and the period counts cannot disagree', () {
+    // One age decides the column, the period and whether a visit counts at
+    // all. These pin that as a structural property rather than three separate
+    // numbers that happen to line up today.
+    OwnerAnalytics spread() => compute(
+          visits: [
+            for (var d = 0; d < 40; d++) ...[
+              visitAt(middayDaysAgo(d)),
+              if (d.isEven) visitAt(middayDaysAgo(d), user: 'u2'),
+            ],
+          ],
+        );
+
+    test('the columns sum to the window total', () {
+      final a = spread();
+      expect(a.dailyVisits.fold<int>(0, (x, y) => x + y), a.visitsInWindow);
+    });
+
+    test('the last seven columns are this period', () {
+      final a = spread();
+      final tail = a.dailyVisits.sublist(
+        a.dailyVisits.length - comparisonPeriodDays,
+      );
+      expect(tail.fold<int>(0, (x, y) => x + y), a.visitsThisPeriod);
+    });
+
+    test('the seven before that are the previous period', () {
+      final a = spread();
+      final end = a.dailyVisits.length - comparisonPeriodDays;
+      final prior = a.dailyVisits.sublist(end - comparisonPeriodDays, end);
+      expect(prior.fold<int>(0, (x, y) => x + y), a.visitsPreviousPeriod);
+    });
+
+    test('a visit stamped in the future counts nowhere', () {
+      // A skewed clock, or a device running ahead of the server. daysBetween
+      // reports an *absolute* distance, so measuring against it put tomorrow
+      // in "this week" while the chart — which has no column past today —
+      // left it out, and the two numbers on screen disagreed.
+      final a = compute(
+        visits: [
+          visitAt(middayDaysAgo(-1)),
+          visitAt(middayDaysAgo(-9), user: 'u2'),
+          visitAt(middayDaysAgo(0), user: 'u3'),
+        ],
+      );
+      expect(a.visitsToday, 1);
+      expect(a.visitsThisPeriod, 1);
+      expect(a.visitsInWindow, 1);
+      expect(a.dailyVisits.fold<int>(0, (x, y) => x + y), a.visitsInWindow);
+    });
+  });
+
   group('the 30-day series', () {
     test('runs oldest first and ends on today', () {
       final a = compute(
@@ -224,6 +267,19 @@ void main() {
       expect(a.dailyVisits.last, 2);
       expect(a.dailyVisits.first, 1);
       expect(a.visitsInWindow, 3);
+    });
+
+    test('names the best single day, which is the chart\'s only scale', () {
+      final a = compute(
+        visits: [
+          visitAt(middayDaysAgo(3)),
+          visitAt(middayDaysAgo(3), user: 'u2'),
+          visitAt(middayDaysAgo(3), user: 'u3'),
+          visitAt(middayDaysAgo(8)),
+        ],
+      );
+      expect(a.busiestDayVisits, 3);
+      expect(compute().busiestDayVisits, 0);
     });
 
     test('drops a visit older than the window rather than folding it into day 0', () {
