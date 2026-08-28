@@ -25,12 +25,29 @@ service cloud.firestore {
     // A user's own profile document. Keyed by Firebase Auth UID.
     match /users/{uid} {
       allow read: if isSelf(uid);
-      // Client may create/update its own profile (onboarding: name + role).
-      // Role is immutable once set, and uid/email are pinned to the token.
+      // Client may create/update its own profile: name, and which side of the
+      // app they are looking at. `id` is pinned to the token so a document
+      // cannot be made to describe someone else.
       //
       // `embers` is spendable currency — it buys streak repairs — so it is
       // written only by Cloud Functions. A client that could set its own
       // balance could repair every streak for free.
+      //
+      // **`role` is a view switch, not a permission.** It used to be immutable
+      // here, which silently broke the two things that change it: the role
+      // switcher on both Profile screens, and registering a shop (which ends by
+      // switching you to owner). Both worked in demo mode, where the write never
+      // leaves the device, so the failure only ever appeared against the live
+      // backend — as a button that did nothing.
+      //
+      // Letting it change grants nothing, because nothing anywhere reads it to
+      // decide access. Ownership is enforced on the thing owned, every time:
+      // `createCheckInToken` rejects unless `shop.ownerId == uid`,
+      // `redeemVoucherByCode` scopes its query to `shopOwnerId == uid`, and the
+      // shops rules below pin `ownerId` to the caller. Flipping this to 'owner'
+      // shows a customer the owner shell over a shop list they do not own, and
+      // every action in it still fails. Keep it that way: if a rule or a
+      // callable ever wants to branch on role, it is reading the wrong thing.
       allow create: if isSelf(uid)
                     && request.resource.data.id == uid
                     && request.resource.data.role in ['customer', 'owner']
@@ -38,7 +55,7 @@ service cloud.firestore {
                         || request.resource.data.embers == 0);
       allow update: if isSelf(uid)
                     && request.resource.data.id == uid
-                    && request.resource.data.role == resource.data.role
+                    && request.resource.data.role in ['customer', 'owner']
                     && request.resource.data.get('embers', 0)
                        == resource.data.get('embers', 0);
       allow delete: if false;

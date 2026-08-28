@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../shared/widgets/app_toast.dart';
+import '../../core/utils/errors.dart';
 import '../../core/router/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -118,13 +122,42 @@ class CustomerProfileScreen extends ConsumerWidget {
     );
   }
 
+  /// Switch which side of the app this account is looking at.
+  ///
+  /// Wrapped, because it writes to Firestore and can fail. It used to be a bare
+  /// `await` followed by a `context.go`: a rejected write threw, the navigation
+  /// line never ran, and the tap did nothing at all with nothing on screen to
+  /// say why — which is indistinguishable from a dead button. The role field
+  /// was in fact immutable in the security rules, so on the live backend this
+  /// was *always* the outcome, while demo mode wrote locally and worked.
   Future<void> _switchRole(
     BuildContext context,
     WidgetRef ref,
     UserRole role,
   ) async {
     if (role == UserRole.customer) return;
-    await ref.read(storeControllerProvider.notifier).switchRole(role);
+    try {
+      await ref
+          .read(storeControllerProvider.notifier)
+          .switchRole(role)
+          .timeout(const Duration(seconds: 20));
+    } on TimeoutException {
+      if (context.mounted) {
+        AppToast.show(
+          context,
+          "Couldn't reach the server. Check your connection and try again.",
+          type: ToastType.error,
+        );
+      }
+      return;
+    } catch (e) {
+      if (context.mounted) {
+        AppToast.show(context, friendlyErrorMessage(e), type: ToastType.error);
+      }
+      return;
+    }
+    // Only on success — navigating regardless lands you on the other shell
+    // while the account still says otherwise.
     if (context.mounted) context.go(Routes.ownerDashboard);
   }
 }

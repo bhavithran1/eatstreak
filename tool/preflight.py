@@ -233,6 +233,33 @@ def check_rules_deny_client_writes() -> None:
            "and no amount of app-side care compensates — the rules are the "
            "only thing standing between a curl command and a free meal.")
 
+    # The inverse invariant, for the one collection clients legitimately write.
+    #
+    # `role` decides which shell the app shows and nothing else — no rule and no
+    # callable reads it to grant anything. It was once pinned immutable here,
+    # which silently broke the role switcher on both Profile screens and shop
+    # registration (which ends by switching you to owner). Both worked in demo
+    # mode, where the write never leaves the device, so the failure only
+    # appeared against the live backend. If someone "hardens" it again, this is
+    # what says so.
+    users = blocks.get("users", "")
+    role_pinned = re.search(
+        r"request\.resource\.data\.role\s*==\s*resource\.data\.role", users)
+    record("BLOCKER", not role_pinned, "users.role is switchable",
+           "" if not role_pinned else
+           "firestore.rules pins role to its existing value, so changing it is "
+           "denied. That breaks the role switcher and shop registration, and "
+           "buys nothing: ownership is enforced on the thing owned "
+           "(shop.ownerId == uid, shopOwnerId scoping), never on this field.\n"
+           "Keep `role in ['customer', 'owner']` instead, so it stays a valid "
+           "value without being frozen.")
+
+    embers_pinned = "embers" in users
+    record("BLOCKER", embers_pinned, "users.embers is pinned against client writes",
+           "" if embers_pinned else
+           "Embers buy streak repairs. A client that can set its own balance "
+           "repairs every streak for free.")
+
     catch_all = re.search(r"match\s+/\{document=\*\*\}\s*\{([^}]*)\}", text)
     denied = bool(catch_all) and "if false" in catch_all.group(1)
     record("BLOCKER", denied, "A catch-all rule denies everything else",
